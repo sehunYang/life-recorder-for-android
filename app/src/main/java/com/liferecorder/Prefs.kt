@@ -32,6 +32,15 @@ object Prefs {
     fun setImportedCallIds(ctx: Context, ids: Set<String>) =
         sp(ctx).edit().putStringSet("imported_call_ids", HashSet(ids)).apply()
 
+    /** 카메라로 찍은 사진·동영상도 함께 올릴지. */
+    fun isIncludeCamera(ctx: Context) = sp(ctx).getBoolean("include_camera", false)
+    fun setIncludeCamera(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_camera", v).apply()
+
+    fun importedCameraIds(ctx: Context): Set<String> =
+        sp(ctx).getStringSet("imported_camera_ids", emptySet()) ?: emptySet()
+    fun setImportedCameraIds(ctx: Context, ids: Set<String>) =
+        sp(ctx).edit().putStringSet("imported_camera_ids", HashSet(ids)).apply()
+
     /** 문자 메시지를 하루치 JSONL로 올릴지. */
     fun isIncludeSms(ctx: Context) = sp(ctx).getBoolean("include_sms", true)
     fun setIncludeSms(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_sms", v).apply()

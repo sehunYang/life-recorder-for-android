@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
     private val wifiOnly = mutableStateOf(true)
     private val chargingOnly = mutableStateOf(true)
     private val includeCalls = mutableStateOf(true)
+    private val includeCamera = mutableStateOf(false)
     private val includeSms = mutableStateOf(true)
     private val includeKakao = mutableStateOf(true)
     private val kakaoAccessOn = mutableStateOf(false)
@@ -120,6 +121,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val cameraReadLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            val ok = hasPermission(Manifest.permission.READ_MEDIA_IMAGES) &&
+                hasPermission(Manifest.permission.READ_MEDIA_VIDEO)
+            Prefs.setIncludeCamera(this, ok)
+            includeCamera.value = ok
+            if (ok) UploadScheduler.enqueueNow(this, ExistingWorkPolicy.REPLACE, manual = true)
+            else toast("사진 읽기 권한이 없으면 카메라 사진을 가져올 수 없습니다")
+        }
+
     private val projectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
             val data = res.data
@@ -158,6 +169,7 @@ class MainActivity : ComponentActivity() {
         wifiOnly.value = Prefs.isWifiOnly(this)
         chargingOnly.value = Prefs.isUploadOnlyCharging(this)
         includeCalls.value = Prefs.isIncludeCalls(this)
+        includeCamera.value = Prefs.isIncludeCamera(this)
         includeSms.value = Prefs.isIncludeSms(this)
         includeKakao.value = Prefs.isIncludeKakao(this)
         kakaoDump.value = Prefs.isKakaoDump(this)
@@ -169,6 +181,7 @@ class MainActivity : ComponentActivity() {
                     wifiOnly = wifiOnly.value,
                     chargingOnly = chargingOnly.value,
                     includeCalls = includeCalls.value,
+                    includeCamera = includeCamera.value,
                     includeSms = includeSms.value,
                     includeKakao = includeKakao.value,
                     kakaoAccessOn = kakaoAccessOn.value,
@@ -197,6 +210,19 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 Prefs.setIncludeCalls(this, v)
                                 includeCalls.value = v
+                                if (v) UploadScheduler.enqueueNow(this, ExistingWorkPolicy.REPLACE, manual = true)
+                            }
+                        },
+                        setIncludeCamera = { v ->
+                            val granted = hasPermission(Manifest.permission.READ_MEDIA_IMAGES) &&
+                                hasPermission(Manifest.permission.READ_MEDIA_VIDEO)
+                            if (v && !granted) {
+                                cameraReadLauncher.launch(
+                                    arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+                                )
+                            } else {
+                                Prefs.setIncludeCamera(this, v)
+                                includeCamera.value = v
                                 if (v) UploadScheduler.enqueueNow(this, ExistingWorkPolicy.REPLACE, manual = true)
                             }
                         },
@@ -269,6 +295,10 @@ class MainActivity : ComponentActivity() {
     private fun turnOn() {
         val wanted = mutableListOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
         if (Prefs.isIncludeCalls(this)) wanted += Manifest.permission.READ_MEDIA_AUDIO
+        if (Prefs.isIncludeCamera(this)) {
+            wanted += Manifest.permission.READ_MEDIA_IMAGES
+            wanted += Manifest.permission.READ_MEDIA_VIDEO
+        }
         if (Prefs.isIncludeSms(this)) { wanted += Manifest.permission.READ_SMS; wanted += Manifest.permission.READ_CONTACTS }
         val needed = wanted.filterNot(::hasPermission)
         if (needed.isEmpty()) startEverything() else permissionLauncher.launch(needed.toTypedArray())

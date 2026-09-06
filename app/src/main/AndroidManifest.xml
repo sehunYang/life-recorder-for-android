@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- 삼성 통화 녹음(공용 저장소 Recordings/Call)을 읽어 함께 업로드하기 위해 -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- 카메라로 찍은 사진·동영상(DCIM/Camera)을 복사해 함께 업로드하기 위해 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <!-- 문자 메시지 하루치 JSONL 내보내기. 연락처는 번호 옆에 이름을 붙이기 위한 선택 권한 -->
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />

@@ -22,6 +22,8 @@ data class Status(
     val driveLinked: Boolean = false,
     /** 통화 녹음 가져오기 상태 표시용 ("3개 가져옴", "권한 필요" 등). */
     val callImportNote: String? = null,
+    /** 카메라 사진·동영상 가져오기 상태 표시용. */
+    val cameraImportNote: String? = null,
     /** 문자 내보내기 상태 표시용. */
     val smsExportNote: String? = null,
     /** 카카오톡 기록 상태 표시용. */

@@ -33,6 +33,7 @@ object Config {
     const val DRIVE_SMS_FOLDER = "sms"
     const val DRIVE_KAKAO_FOLDER = "kakao"
     const val DRIVE_KAKAO_MEDIA_FOLDER = "kakao-media"
+    const val DRIVE_CAMERA_FOLDER = "camera"
 
     /** 카카오톡 패키지명. 알림 가로채기 대상. */
     const val KAKAO_PACKAGE = "com.kakao.talk"
@@ -43,4 +44,14 @@ object Config {
 
     /** 문자 내보내기를 처음 켤 때 며칠 전까지 거슬러 올라갈지. */
     const val SMS_BACKFILL_DAYS = 30
+
+    /** 카메라로 찍은 사진·동영상이 있는 공용 저장소 상대 경로(MediaStore RELATIVE_PATH, LIKE 패턴). */
+    val CAMERA_PATHS = listOf("DCIM/Camera/%")
+
+    /**
+     * 사진첩 소급분을 한 번에 다 복사하면 폰 저장공간이 찬다(실측: 11GB).
+     * 업로드 작업 한 번에 이만큼까지만 가져오고 나머지는 다음 실행으로 미룬다.
+     * 업로드가 끝난 파일은 지워지므로, 여러 번에 걸쳐 조금씩 옮겨진다.
+     */
+    const val CAMERA_BUDGET_BYTES = 1024L * 1024 * 1024
 }

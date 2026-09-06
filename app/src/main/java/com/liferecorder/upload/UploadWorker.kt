@@ -34,6 +34,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     private suspend fun run(): Result {
         val ctx = applicationContext
         importCallRecordings(ctx)
+        importCameraMedia(ctx)
         exportSms(ctx)
         finalizeKakao(ctx)
         RecorderState.refreshPending(ctx)
@@ -98,6 +99,25 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         }
     }
 
+    /** 카메라로 찍은 사진·동영상을 앱 폴더로 복사해 대기열에 넣는다. 실패해도 나머지 업로드는 계속한다. */
+    private fun importCameraMedia(ctx: Context) {
+        if (!Prefs.isIncludeCamera(ctx)) {
+            RecorderState.update { it.copy(cameraImportNote = null) }
+            return
+        }
+        if (!CameraImporter.hasPermission(ctx)) {
+            RecorderState.update { it.copy(cameraImportNote = "사진 읽기 권한 필요") }
+            return
+        }
+        try {
+            val n = CameraImporter.importNew(ctx)
+            RecorderState.update { it.copy(cameraImportNote = if (n > 0) "${n}개 새로 가져옴" else "새 파일 없음") }
+        } catch (e: Exception) {
+            Log.w(TAG, "camera import failed", e)
+            RecorderState.update { it.copy(cameraImportNote = "가져오기 실패: ${e.message}") }
+        }
+    }
+
     /** 어제까지의 문자를 하루 단위 JSONL로 그대로 내보낸다. 실패해도 나머지 업로드는 계속한다. */
     private fun exportSms(ctx: Context) {
         if (!Prefs.isIncludeSms(ctx)) {
@@ -151,9 +171,11 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             ?: client.ensureFolder(Config.DRIVE_KAKAO_FOLDER, root).also { Prefs.setFolderId(ctx, "kakao", it) }
         val kakaoMedia = Prefs.folderId(ctx, "kakaomedia")
             ?: client.ensureFolder(Config.DRIVE_KAKAO_MEDIA_FOLDER, root).also { Prefs.setFolderId(ctx, "kakaomedia", it) }
+        val camera = Prefs.folderId(ctx, "camera")
+            ?: client.ensureFolder(Config.DRIVE_CAMERA_FOLDER, root).also { Prefs.setFolderId(ctx, "camera", it) }
         return mapOf(
             "audio" to audio, "screen" to screen, "call" to call,
-            "sms" to sms, "kakao" to kakao, "kakaomedia" to kakaoMedia,
+            "sms" to sms, "kakao" to kakao, "kakaomedia" to kakaoMedia, "camera" to camera,
         )
     }
 

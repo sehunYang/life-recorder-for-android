@@ -29,6 +29,7 @@ object Storage {
     fun screenDir(ctx: Context): File = File(baseDir(ctx), "screen").apply { mkdirs() }
     fun callDir(ctx: Context): File = File(baseDir(ctx), "call").apply { mkdirs() }
     fun smsDir(ctx: Context): File = File(baseDir(ctx), "sms").apply { mkdirs() }
+    fun cameraDir(ctx: Context): File = File(baseDir(ctx), "camera").apply { mkdirs() }
     fun kakaoDir(ctx: Context): File = File(baseDir(ctx), "kakao").apply { mkdirs() }
 
     /**
@@ -38,7 +39,7 @@ object Storage {
     fun kakaoMediaDir(ctx: Context): File = File(baseDir(ctx), "kakaomedia").apply { mkdirs() }
 
     private fun allDirs(ctx: Context) =
-        listOf(audioDir(ctx), screenDir(ctx), callDir(ctx), smsDir(ctx), kakaoDir(ctx), kakaoMediaDir(ctx))
+        listOf(audioDir(ctx), screenDir(ctx), callDir(ctx), smsDir(ctx), kakaoDir(ctx), kakaoMediaDir(ctx), cameraDir(ctx))
     private fun listAll(ctx: Context): List<File> =
         allDirs(ctx).flatMap { d -> d.listFiles()?.toList() ?: emptyList() }.filter { it.isFile }
 
@@ -59,6 +60,7 @@ object Storage {
     fun folderKeyOf(f: File): String = when {
         f.name.startsWith("screen_") -> "screen"
         f.name.startsWith("call_") -> "call"
+        f.name.startsWith("camera_") -> "camera"
         f.name.startsWith("sms_") -> "sms"
         // kakaoimg_ = 알림에서 받은 사진, kakaoexp_ = 내보내기 폴더에서 가져온 미디어.
         f.name.startsWith("kakaoimg_") || f.name.startsWith("kakaoexp_") -> "kakaomedia"
@@ -148,7 +150,7 @@ object Storage {
             if (f.exists()) { Log.i(TAG, "recovering ${f.name}"); finalizeAudioPart(f) }
         }
         files.filter {
-            it.name.startsWith("screen_") || it.name.startsWith("call_") ||
+            it.name.startsWith("screen_") || it.name.startsWith("call_") || it.name.startsWith("camera_") ||
                 it.name.startsWith("sms_") || it.name.startsWith("kakao_") ||
                 it.name.startsWith("kakaoimg_") || it.name.startsWith("kakaoexp_")
         }.forEach { f ->

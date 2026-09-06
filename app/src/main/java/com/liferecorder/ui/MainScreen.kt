@@ -61,6 +61,7 @@ data class UiActions(
     val setWifiOnly: (Boolean) -> Unit,
     val setChargingOnly: (Boolean) -> Unit,
     val setIncludeCalls: (Boolean) -> Unit,
+    val setIncludeCamera: (Boolean) -> Unit,
     val setIncludeSms: (Boolean) -> Unit,
     val setIncludeKakao: (Boolean) -> Unit,
     val openNotificationAccess: () -> Unit,
@@ -76,6 +77,7 @@ fun MainScreen(
     wifiOnly: Boolean,
     chargingOnly: Boolean,
     includeCalls: Boolean,
+    includeCamera: Boolean,
     includeSms: Boolean,
     includeKakao: Boolean,
     kakaoAccessOn: Boolean,
@@ -95,7 +97,7 @@ fun MainScreen(
             Header(status)
             Hero(status, actions)
             UploadCard(status, wifiOnly, chargingOnly, actions)
-            CollectCard(status, includeCalls, includeSms, actions)
+            CollectCard(status, includeCalls, includeCamera, includeSms, actions)
             KakaoCard(status, includeKakao, kakaoAccessOn, kakaoDump, actions)
             KeepAliveCard(batteryExempt, actions)
             Spacer(Modifier.height(12.dp))
@@ -276,7 +278,13 @@ private fun UploadCard(status: Status, wifiOnly: Boolean, chargingOnly: Boolean,
 }
 
 @Composable
-private fun CollectCard(status: Status, includeCalls: Boolean, includeSms: Boolean, actions: UiActions) {
+private fun CollectCard(
+    status: Status,
+    includeCalls: Boolean,
+    includeCamera: Boolean,
+    includeSms: Boolean,
+    actions: UiActions,
+) {
     SectionCard(icon = painterResource(R.drawable.ic_folder), title = "함께 모으기") {
         ToggleRow(
             "통화 녹음 파일",
@@ -284,6 +292,15 @@ private fun CollectCard(status: Status, includeCalls: Boolean, includeSms: Boole
             actions.setIncludeCalls,
             subtitle = if (includeCalls) status.callImportNote ?: "폰이 저장한 통화 녹음을 복사해 올립니다" else "꺼짐",
         )
+        ToggleRow(
+            "카메라 사진·동영상",
+            includeCamera,
+            actions.setIncludeCamera,
+            subtitle = if (includeCamera) {
+                status.cameraImportNote ?: "DCIM/Camera를 복사해 올립니다. 원본은 그대로 둡니다"
+            } else "꺼짐",
+        )
+        if (includeCamera) Hint("사진첩이 크면 한 번에 다 올리지 않고 실행마다 1GB씩 나눠 올립니다. 최신 것부터 갑니다.")
         ToggleRow(
             "문자 메시지",
             includeSms,
