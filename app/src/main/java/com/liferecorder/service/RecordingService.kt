@@ -15,7 +15,6 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import com.liferecorder.AppScope
-import com.liferecorder.Config
 import com.liferecorder.Notifications
 import com.liferecorder.Prefs
 import com.liferecorder.RecorderState
@@ -30,7 +29,8 @@ import java.io.File
  *
  * 전력 절약: WakeLock은 잡지 않는다. 마이크 녹음 경로가 어차피 CPU를 주기적으로 깨우고,
  * 그 사이에는 시스템이 더 깊은 절전으로 들어갈 수 있게 둔다.
- * 화면이 꺼지거나 기기가 뜨거우면 화면 캡처 입력만 끊어 GPU 합성/인코딩을 멈춘다.
+ * 화면이 꺼지면 화면 캡처 입력만 끊어 GPU 합성/인코딩을 멈춘다.
+ * (발열로 끊는 기능은 있었다가 뺐다. 무거운 앱에 들어갈 때마다 화면 기록이 멈춰 공백이 생겼다.)
  */
 class RecordingService : Service() {
 
@@ -41,7 +41,6 @@ class RecordingService : Service() {
     private var fgTypes = 0
 
     private var screenOn = true
-    private var thermalHot = false
     /** 자동 재개가 실패해도 잠금 해제마다 다시 달려들지 않도록 최소 간격을 둔다. */
     private var lastResumeAttempt = 0L
 
@@ -57,39 +56,12 @@ class RecordingService : Service() {
         }
     }
 
-    /** 뜨거워지면 즉시 끊고, 식으면 잠시 기다렸다가 붙인다 (경계에서 왔다 갔다 하지 않도록). */
-    private val thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
-        val hot = status >= Config.SCREEN_PAUSE_THERMAL
-        main.post {
-            main.removeCallbacks(thermalResume)
-            when {
-                hot && !thermalHot -> {
-                    thermalHot = true
-                    Log.i(TAG, "thermal status=$status, pausing screen capture")
-                    applyCaptureGate()
-                }
-                !hot && thermalHot -> {
-                    Log.i(TAG, "thermal status=$status, resuming in ${Config.SCREEN_THERMAL_RESUME_DELAY_MS / 1000}s")
-                    main.postDelayed(thermalResume, Config.SCREEN_THERMAL_RESUME_DELAY_MS)
-                }
-            }
-        }
-    }
-
-    private val thermalResume = Runnable {
-        thermalHot = false
-        Log.i(TAG, "thermal cooled, resuming screen capture")
-        applyCaptureGate()
-    }
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         val pm = getSystemService(PowerManager::class.java)
         screenOn = pm.isInteractive
-        thermalHot = pm.currentThermalStatus >= Config.SCREEN_PAUSE_THERMAL
-        pm.addThermalStatusListener(mainExecutor, thermalListener)
         registerReceiver(
             screenReceiver,
             IntentFilter().apply {
@@ -208,13 +180,9 @@ class RecordingService : Service() {
         }
     }
 
-    /** 화면 꺼짐/발열 상태를 화면 캡처 입력에 반영한다. */
+    /** 화면 꺼짐 상태를 화면 캡처 입력에 반영한다. */
     private fun applyCaptureGate() {
-        val reason = when {
-            !screenOn -> "화면 꺼짐"
-            thermalHot -> "발열"
-            else -> null
-        }
+        val reason = if (!screenOn) "화면 꺼짐" else null
         val s = screen
         s?.setCaptureEnabled(reason == null)
         RecorderState.update { it.copy(screenPausedReason = if (s != null) reason else null) }
@@ -280,9 +248,7 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
-        main.removeCallbacks(thermalResume)
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
-        try { getSystemService(PowerManager::class.java).removeThermalStatusListener(thermalListener) } catch (_: Exception) {}
         audio?.stop()
         audio = null
         screen?.let { s -> screen = null; s.stop {} }
