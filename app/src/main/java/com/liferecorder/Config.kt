@@ -9,11 +9,13 @@ object Config {
     const val AUDIO_BITRATE = 160_000
     const val AUDIO_CHANNELS = 1
 
-    // 화면 녹화: 해상도 2/3 축소(약 720px 폭), 최대 5fps, 1.2Mbps 상한. 본문 크기 글씨까지 읽히는 수준.
-    // (정지 화면일 때는 거의 0에 가깝고, 계속 조작할 때 시간당 최대 약 540MB)
-    const val SCREEN_SCALE = 0.67f
+    // 화면 녹화: 해상도 1/2 축소(약 540px 폭), 최대 5fps, 0.8Mbps 상한.
+    // 화면 구성과 큰 글씨는 식별되지만 본문 글씨는 읽기 어렵다. 발열 때문에 0.67에서 내렸다:
+    // 가상 디스플레이 합성은 화면이 바뀔 때마다(최대 120Hz) GPU가 이 크기로 한 장씩 그리므로
+    // 픽셀 수가 곧 열이다. (정지 화면일 때는 거의 0, 계속 조작할 때 시간당 최대 약 360MB)
+    const val SCREEN_SCALE = 0.5f
     const val SCREEN_FPS = 5
-    const val SCREEN_BITRATE = 1_200_000
+    const val SCREEN_BITRATE = 800_000
     const val SCREEN_IFRAME_INTERVAL_SEC = 5
     /** 화면이 멈춰 있어도 이 간격마다 이전 프레임을 반복 인코딩해 타임라인이 끊기지 않게 한다. 길수록 인코더가 덜 깨어난다. */
     const val SCREEN_REPEAT_FRAME_US = 10_000_000L
