@@ -215,7 +215,12 @@ adb shell appops set com.liferecorder PROJECT_MEDIA allow
 
 **대화 내보내기 파일** — 카카오톡에서 채팅방 > 메뉴 > 대화 내용 > 내보내기 후 Life Recorder로 공유하면
 그 파일을 변환 없이 `kakao_<시각>_export_<원본이름>` 으로 올린다.
-앱 안의 "내보낸 대화 파일 가져오기" 버튼으로 골라도 된다.
+앱의 카카오톡 카드에 가져오기 버튼이 둘 있다.
+
+- **파일 고르기** — 텍스트만 내보낸 `.txt`나 `.zip`을 고른다
+- **폴더 고르기** — "미디어 포함 저장"이 `Documents/KakaoTalk/Chats/<대화방>/`에 만든 폴더를 통째로 가져온다.
+  대화록은 `LifeRecorder/kakao`로, 사진·동영상은 `LifeRecorder/kakao-media`로 나눠 올린다 (`kakaoexp_` 접두어).
+  사진이 많아 하나씩 고를 수 없을 때 쓴다
 
 내보내기 결과가 카카오톡 버전에 따라 txt 한 개, zip 한 개, 여러 파일, 또는 첨부 없는 본문 텍스트로
 제각각 나오기 때문에 공유 필터를 타입으로 좁히지 않았다. 그래서 Life Recorder는 카카오톡뿐 아니라

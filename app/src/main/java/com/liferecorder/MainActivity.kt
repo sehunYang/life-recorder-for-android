@@ -67,6 +67,33 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    /** "미디어 포함 저장"이 만든 폴더를 통째로 가져온다. 사진이 많아 하나씩 고를 수 없기 때문. */
+    private val kakaoFolderLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            toast("폴더를 읽는 중…")
+            lifecycleScope.launch {
+                val r = withContext(Dispatchers.IO) { KakaoImport.importTree(this@MainActivity, uri) }
+                val title =
+                    if (r.total > 0) "카카오톡 폴더에서 ${r.total}개 가져옴" else "가져오지 못했습니다"
+                val detail = if (r.total > 0) {
+                    buildString {
+                        append("대화록 ${r.text}개, 미디어 ${r.media}개 · ${Storage.fmtBytes(r.bytes)}")
+                        if (r.failed > 0) append("\n실패 ${r.failed}개 (${r.error})")
+                        append("\n업로드 대기열에 넣었습니다")
+                    }
+                } else {
+                    r.error ?: "폴더에 가져올 파일이 없습니다"
+                }
+                Notifications.showImportResult(this@MainActivity, title, detail)
+                toast(title)
+                if (r.total > 0) {
+                    withContext(Dispatchers.IO) { RecorderState.refreshPending(this@MainActivity) }
+                    UploadScheduler.enqueueNow(this@MainActivity, ExistingWorkPolicy.REPLACE, manual = true)
+                }
+            }
+        }
+
     private val smsReadLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             if (hasPermission(Manifest.permission.READ_SMS)) {
@@ -188,6 +215,8 @@ class MainActivity : ComponentActivity() {
                             // 파일 앱이 매기는 MIME 타입이 제각각이라 좁혀 두면 선택이 막힌다.
                             kakaoFileLauncher.launch(arrayOf("*/*"))
                         },
+                        // 시작 위치를 지정할 수 없어 사용자가 Documents/KakaoTalk/Chats로 직접 들어가야 한다.
+                        importKakaoFolder = { kakaoFolderLauncher.launch(null) },
                         setIncludeSms = { v ->
                             if (v && !hasPermission(Manifest.permission.READ_SMS)) {
                                 smsReadLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.READ_CONTACTS))

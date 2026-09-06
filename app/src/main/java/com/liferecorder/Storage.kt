@@ -60,9 +60,18 @@ object Storage {
         f.name.startsWith("screen_") -> "screen"
         f.name.startsWith("call_") -> "call"
         f.name.startsWith("sms_") -> "sms"
-        f.name.startsWith("kakaoimg_") -> "kakaomedia"
+        // kakaoimg_ = 알림에서 받은 사진, kakaoexp_ = 내보내기 폴더에서 가져온 미디어.
+        f.name.startsWith("kakaoimg_") || f.name.startsWith("kakaoexp_") -> "kakaomedia"
         f.name.startsWith("kakao_") -> "kakao"
         else -> "audio"
+    }
+
+    /** 사람이 읽는 파일 크기. */
+    fun fmtBytes(b: Long): String = when {
+        b >= 1L shl 30 -> "%.2f GB".format(b / (1L shl 30).toDouble())
+        b >= 1L shl 20 -> "%.1f MB".format(b / (1L shl 20).toDouble())
+        b > 0 -> "${b / 1024} KB"
+        else -> "0"
     }
 
     fun mimeOf(f: File): String = when (f.extension.lowercase()) {
@@ -141,7 +150,7 @@ object Storage {
         files.filter {
             it.name.startsWith("screen_") || it.name.startsWith("call_") ||
                 it.name.startsWith("sms_") || it.name.startsWith("kakao_") ||
-                it.name.startsWith("kakaoimg_")
+                it.name.startsWith("kakaoimg_") || it.name.startsWith("kakaoexp_")
         }.forEach { f ->
             if (f.exists()) { Log.i(TAG, "dropping incomplete ${f.name}"); f.delete() }
         }

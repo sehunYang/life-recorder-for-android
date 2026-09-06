@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.liferecorder.R
 import com.liferecorder.Status
+import com.liferecorder.Storage
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,6 +66,7 @@ data class UiActions(
     val openNotificationAccess: () -> Unit,
     val setKakaoDump: (Boolean) -> Unit,
     val importKakaoExport: () -> Unit,
+    val importKakaoFolder: () -> Unit,
     val requestBatteryExemption: () -> Unit,
 )
 
@@ -315,7 +317,11 @@ private fun KakaoCard(status: Status, includeKakao: Boolean, kakaoAccessOn: Bool
             "내가 보낸 메시지와 채팅방을 열어둔 동안 받은 메시지는 알림이 없어 빠집니다. " +
                 "전체 대화가 필요하면 카카오톡에서 채팅방 > 메뉴 > 대화 내용 > 내보내기 후 Life Recorder로 공유하세요."
         )
-        OutlinedButton(onClick = actions.importKakaoExport, Modifier.fillMaxWidth()) { Text("내보낸 대화 파일 가져오기") }
+        Hint("텍스트만 내보냈으면 파일을, 미디어까지 저장했으면 그 폴더를 고르세요. 폴더는 안의 사진까지 통째로 가져옵니다.")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = actions.importKakaoExport, Modifier.weight(1f)) { Text("파일 고르기") }
+            OutlinedButton(onClick = actions.importKakaoFolder, Modifier.weight(1f)) { Text("폴더 고르기") }
+        }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ToggleRow(
@@ -361,8 +367,4 @@ private fun fmtElapsed(ms: Long): String {
     }
 }
 
-private fun fmtBytes(b: Long) = when {
-    b >= 1L shl 30 -> "%.2f GB".format(b / (1L shl 30).toDouble())
-    b >= 1L shl 20 -> "%.1f MB".format(b / (1L shl 20).toDouble())
-    else -> "${b / 1024} KB"
-}
+private fun fmtBytes(b: Long) = Storage.fmtBytes(b)

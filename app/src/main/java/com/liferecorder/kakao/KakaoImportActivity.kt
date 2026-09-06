@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.work.ExistingWorkPolicy
 import com.liferecorder.Notifications
+import com.liferecorder.Storage
 import com.liferecorder.upload.UploadScheduler
 import kotlin.concurrent.thread
 
@@ -41,7 +42,7 @@ class KakaoImportActivity : Activity() {
 
             val title = if (done.isNotEmpty()) "카카오톡 대화 ${done.size}개 가져옴" else "가져오지 못했습니다"
             val detail = if (done.isNotEmpty()) {
-                done.joinToString("\n") { "${it.fileName} (${fmtBytes(it.bytes)})" } + "\n업로드 대기열에 넣었습니다"
+                done.joinToString("\n") { "${it.fileName} (${Storage.fmtBytes(it.bytes)})" } + "\n업로드 대기열에 넣었습니다"
             } else {
                 lastError ?: "가져올 내용이 없습니다"
             }
@@ -66,9 +67,4 @@ class KakaoImportActivity : Activity() {
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-}
-
-private fun fmtBytes(b: Long) = when {
-    b >= 1L shl 20 -> "%.1f MB".format(b / (1L shl 20).toDouble())
-    else -> "${b / 1024} KB"
 }
