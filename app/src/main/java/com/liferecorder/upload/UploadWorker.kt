@@ -33,19 +33,16 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
     private suspend fun run(): Result {
         val ctx = applicationContext
-        importCallRecordings(ctx)
-        importCameraMedia(ctx)
-        exportSms(ctx)
-        finalizeKakao(ctx)
-        RecorderState.refreshPending(ctx)
-        val files = Storage.finishedFiles(ctx)
-        Prefs.pruneUploadSessions(ctx, files.map { it.name }.toSet())
-        if (files.isEmpty()) return Result.success()
 
+        // 계정 확인이 먼저다. 수집 기록을 복원하기 전에 수집기를 돌리면
+        // 재설치 직후 소급분(사진·통화)이 통째로 다시 올라간다.
         val token = DriveAuth.silentToken(ctx)
         if (token == null) {
             Notifications.showDriveLoginNeeded(ctx)
             RecorderState.update { it.copy(driveLinked = false, lastUploadError = "Google 계정 연결 필요") }
+            // 카카오톡 로그 확정은 로컬 작업이라 계정이 없어도 해 둔다.
+            finalizeKakao(ctx)
+            RecorderState.refreshPending(ctx)
             return Result.retry()
         }
         RecorderState.update { it.copy(driveLinked = true) }
@@ -54,6 +51,23 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
         try {
             val folders = ensureFolders(ctx, client)
+
+            if (IndexRestore.ensureRestored(ctx, client, folders.getValue("index"))) {
+                importCallRecordings(ctx)
+                importCameraMedia(ctx)
+                exportSms(ctx)
+            } else {
+                Log.w(TAG, "index restore pending, skipping importers")
+                RecorderState.update { it.copy(lastUploadError = "수집 기록 복원 대기 중 (가져오기 건너뜀)") }
+            }
+            finalizeKakao(ctx)
+            finalizeIndex(ctx)
+            RecorderState.refreshPending(ctx)
+
+            val pending = Storage.finishedFiles(ctx).map { it.name }.toSet()
+            Prefs.pruneUploadSessions(ctx, pending)
+            Prefs.pruneFileSources(ctx, pending)
+
             while (!isStopped) {
                 val file = Storage.finishedFiles(ctx).firstOrNull() ?: break
                 RecorderState.update { it.copy(uploading = file.name, lastUploadError = null) }
@@ -156,6 +170,15 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         }
     }
 
+    /** 날이 지난 수집 기록을 업로드 대상으로 확정한다. */
+    private fun finalizeIndex(ctx: Context) {
+        try {
+            IndexLog.finalizeCompletedDays(ctx)
+        } catch (e: Exception) {
+            Log.w(TAG, "index finalize failed", e)
+        }
+    }
+
     private fun ensureFolders(ctx: Context, client: DriveClient): Map<String, String> {
         val root = Prefs.folderId(ctx, "root")
             ?: client.ensureFolder(Config.DRIVE_ROOT_FOLDER, null).also { Prefs.setFolderId(ctx, "root", it) }
@@ -173,15 +196,19 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             ?: client.ensureFolder(Config.DRIVE_KAKAO_MEDIA_FOLDER, root).also { Prefs.setFolderId(ctx, "kakaomedia", it) }
         val camera = Prefs.folderId(ctx, "camera")
             ?: client.ensureFolder(Config.DRIVE_CAMERA_FOLDER, root).also { Prefs.setFolderId(ctx, "camera", it) }
+        val index = Prefs.folderId(ctx, "index")
+            ?: client.ensureFolder(Config.DRIVE_INDEX_FOLDER, root).also { Prefs.setFolderId(ctx, "index", it) }
         return mapOf(
             "audio" to audio, "screen" to screen, "call" to call,
-            "sms" to sms, "kakao" to kakao, "kakaomedia" to kakaoMedia, "camera" to camera,
+            "sms" to sms, "kakao" to kakao, "kakaomedia" to kakaoMedia,
+            "camera" to camera, "index" to index,
         )
     }
 
     /** true면 완료(로컬 삭제됨), false면 중단 요청으로 멈춘 것. 오류는 예외로 올라간다. */
     private fun uploadOne(ctx: Context, client: DriveClient, file: File, folders: Map<String, String>): Boolean {
-        val parent = folders.getValue(Storage.folderKeyOf(file))
+        val folderKey = Storage.folderKeyOf(file)
+        val parent = folders.getValue(folderKey)
         val total = file.length()
         var session = Prefs.uploadSession(ctx, file.name)
         var offset = 0L
@@ -223,9 +250,17 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             Prefs.setUploadSession(ctx, file.name, null)
             throw IOException(if (!sizeOk) "업로드 크기 불일치 (${uploaded.size} != $total): ${file.name}" else "업로드 MD5 불일치: ${file.name}")
         }
+        // 수집 기록. 기록 파일 자신은 남기지 않는다 (기록의 기록이 꼬리를 문다).
+        if (folderKey != "index") {
+            IndexLog.record(
+                ctx, file.name, folderKey, total, uploaded.id, uploaded.md5,
+                Prefs.fileSource(ctx, file.name),
+            )
+        }
         // 로컬 삭제 → 세션 정리 순서. 사이에 죽어도 다음 실행의 세션 정리에서 고아 세션이 지워진다.
         if (!file.delete()) Log.w(TAG, "local delete failed: ${file.name}")
         Prefs.setUploadSession(ctx, file.name, null)
+        Prefs.clearFileSource(ctx, file.name)
         Log.i(TAG, "uploaded ${file.name} -> ${uploaded.id}")
         return true
     }

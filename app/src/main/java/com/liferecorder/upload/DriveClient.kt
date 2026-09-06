@@ -65,6 +65,37 @@ class DriveClient(private val token: String) {
         http.newCall(req).execute().use { r -> return JSONObject(check(r)).getString("id") }
     }
 
+    data class Entry(val id: String, val name: String)
+
+    /** 폴더 안의 파일 목록. 수집 기록(index)을 되읽을 때 쓴다. 페이지를 끝까지 따라간다. */
+    fun listFiles(parentId: String): List<Entry> {
+        val out = ArrayList<Entry>()
+        var pageToken: String? = null
+        do {
+            val b = "$API/files".toHttpUrl().newBuilder()
+                .addQueryParameter("q", "'$parentId' in parents and trashed = false")
+                .addQueryParameter("fields", "nextPageToken,files(id,name)")
+                .addQueryParameter("pageSize", "1000")
+            if (pageToken != null) b.addQueryParameter("pageToken", pageToken)
+            http.newCall(authed(b.build().toString()).get().build()).execute().use { r ->
+                val o = JSONObject(check(r))
+                val files = o.getJSONArray("files")
+                for (i in 0 until files.length()) {
+                    val f = files.getJSONObject(i)
+                    out += Entry(f.getString("id"), f.optString("name"))
+                }
+                pageToken = o.optString("nextPageToken").ifEmpty { null }
+            }
+        } while (pageToken != null)
+        return out
+    }
+
+    /** 파일 하나를 텍스트로 내려받는다. 수집 기록은 작아서 통째로 읽어도 된다. */
+    fun downloadText(fileId: String): String {
+        val req = authed("$API/files/$fileId?alt=media").get().build()
+        http.newCall(req).execute().use { r -> return check(r) }
+    }
+
     /** 재개 가능 업로드 세션을 열고 세션 URI를 돌려준다. */
     fun startSession(file: File, parentId: String, mime: String): String {
         val meta = JSONObject().put("name", file.name).put("parents", JSONArray().put(parentId))

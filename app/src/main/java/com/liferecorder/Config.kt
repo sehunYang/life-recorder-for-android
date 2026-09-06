@@ -34,6 +34,7 @@ object Config {
     const val DRIVE_KAKAO_FOLDER = "kakao"
     const val DRIVE_KAKAO_MEDIA_FOLDER = "kakao-media"
     const val DRIVE_CAMERA_FOLDER = "camera"
+    const val DRIVE_INDEX_FOLDER = "index"
 
     /** 카카오톡 패키지명. 알림 가로채기 대상. */
     const val KAKAO_PACKAGE = "com.kakao.talk"

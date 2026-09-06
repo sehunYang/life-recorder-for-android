@@ -125,7 +125,9 @@ object CameraImporter {
                         dest.delete()
                         continue
                     }
-                    Storage.finishPart(dest)
+                    val done = Storage.finishPart(dest)
+                    // 업로드가 끝나면 이 값이 수집 기록에 남아, 재설치 후 복원의 근거가 된다.
+                    Prefs.setFileSource(ctx, done.name, "camera:$key")
                     imported += key
                     budget.add(size)
                     count++

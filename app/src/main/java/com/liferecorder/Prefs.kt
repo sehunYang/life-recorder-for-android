@@ -57,6 +57,29 @@ object Prefs {
     fun isKakaoDump(ctx: Context) = sp(ctx).getBoolean("kakao_dump", false)
     fun setKakaoDump(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("kakao_dump", v).apply()
 
+    /** Drive의 수집 기록으로 "이미 올린 것" 목록을 되살렸는지. 재설치 직후 한 번만 한다. */
+    fun isIndexRestored(ctx: Context) = sp(ctx).getBoolean("index_restored", false)
+    fun setIndexRestored(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("index_restored", v).apply()
+
+    /**
+     * 대기 중인 파일이 어느 원본에서 왔는지. 업로드가 끝나면 수집 기록에 적고 지운다.
+     * 업로더는 File만 들고 있어서, 가져올 때 여기에 적어 두지 않으면 출처를 알 수 없다.
+     */
+    fun fileSource(ctx: Context, fileName: String): String? = sp(ctx).getString("src_$fileName", null)
+    fun setFileSource(ctx: Context, fileName: String, src: String?) =
+        sp(ctx).edit().putString("src_$fileName", src).apply()
+    fun clearFileSource(ctx: Context, fileName: String) =
+        sp(ctx).edit().remove("src_$fileName").apply()
+
+    /** 더 이상 존재하지 않는 파일의 출처 기록을 지운다. */
+    fun pruneFileSources(ctx: Context, existingFileNames: Set<String>) {
+        val e = sp(ctx).edit()
+        sp(ctx).all.keys
+            .filter { it.startsWith("src_") && it.removePrefix("src_") !in existingFileNames }
+            .forEach { e.remove(it) }
+        e.apply()
+    }
+
     fun folderId(ctx: Context, key: String): String? = sp(ctx).getString("folder_$key", null)
     fun setFolderId(ctx: Context, key: String, id: String?) =
         sp(ctx).edit().putString("folder_$key", id).apply()
