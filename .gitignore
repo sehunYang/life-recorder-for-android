@@ -32,3 +32,6 @@ Thumbs.db
 # 에이전트 도구 작업 상태
 .omc/
 .claude/
+
+# 기기에서 빼낸 백업 (개인 데이터)
+kakao-backup-*/
