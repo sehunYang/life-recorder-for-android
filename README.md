@@ -80,8 +80,8 @@ ON을 누르면 백그라운드에서 **주변 소리(마이크)** 와 **화면*
 ### 1. 빌드
 
 ```powershell
-git clone https://github.com/sehunYang/life-recorder.git
-cd life-recorder
+git clone https://github.com/sehunYang/life-recorder-for-android.git
+cd life-recorder-for-android
 .\gradlew.bat assembleDebug
 ```
 
