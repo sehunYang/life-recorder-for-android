@@ -1,0 +1,34 @@
+# Android / Gradle
+*.iml
+.gradle/
+.kotlin/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ
+.idea/
+*.hprof
+
+# 서명 키 (절대 커밋하지 않는다)
+*.jks
+*.keystore
+keystore.properties
+
+# 기기에서 뽑아온 실제 기록 데이터
+kakao-test/
+*.jsonl
+*.jsonl.part
+*.m4a
+*.mp4
+*.aac
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 에이전트 도구 작업 상태
+.omc/
+.claude/

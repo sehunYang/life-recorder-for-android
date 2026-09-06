@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 삼성 통화 녹음(공용 저장소 Recordings/Call)을 읽어 함께 업로드하기 위해 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- 문자 메시지 하루치 JSONL 내보내기. 연락처는 번호 옆에 이름을 붙이기 위한 선택 권한 -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".LifeRecorderApp"
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.LifeRecorder">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 잠금 해제 후 화면 녹화를 되살릴 때만 잠깐 떴다 사라지는 동의 전용 창 -->
+        <activity
+            android:name=".service.ProjectionRequestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name=".service.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection"
+            android:stopWithTask="false" />
+
+        <!-- 카카오톡 알림 가로채기. 설정 > 알림 > 알림 접근에서 사용자가 직접 켜야 한다. -->
+        <service
+            android:name=".kakao.KakaoNotificationListener"
+            android:exported="true"
+            android:label="Life Recorder (카카오톡 기록)"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- 카카오톡 대화 내용 내보내기 → 다른 앱으로 공유 → Life Recorder -->
+        <activity
+            android:name=".kakao.KakaoImportActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="Life Recorder로 가져오기"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <!-- 카카오톡 내보내기는 버전에 따라 txt 한 개, zip 한 개(application/zip 또는
+                 application/x-zip-compressed), 여러 파일(타입이 */*로 잡힌다), 또는 본문 텍스트로
+                 제각각 나온다. 어느 쪽이든 놓치지 않도록 종류를 가리지 않고 받는다.
+                 어차피 이 앱은 받은 것을 변환 없이 그대로 올리기만 한다. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
