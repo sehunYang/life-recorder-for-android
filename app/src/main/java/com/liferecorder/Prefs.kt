@@ -57,6 +57,11 @@ object Prefs {
     fun isKakaoDump(ctx: Context) = sp(ctx).getBoolean("kakao_dump", false)
     fun setKakaoDump(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("kakao_dump", v).apply()
 
+    /** 기록 기능을 넣기 전에 이미 올라가 있던 파일들의 목록을 한 번 남겼는지. */
+    fun isIndexSnapshotDone(ctx: Context) = sp(ctx).getBoolean("index_snapshot_done", false)
+    fun setIndexSnapshotDone(ctx: Context, v: Boolean) =
+        sp(ctx).edit().putBoolean("index_snapshot_done", v).apply()
+
     /** Drive의 수집 기록으로 "이미 올린 것" 목록을 되살렸는지. 재설치 직후 한 번만 한다. */
     fun isIndexRestored(ctx: Context) = sp(ctx).getBoolean("index_restored", false)
     fun setIndexRestored(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("index_restored", v).apply()

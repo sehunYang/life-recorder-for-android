@@ -73,6 +73,7 @@ LifeRecorder/
 | `call/` | `^call_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<orig>.+)$` | 원본 파일의 **최종 수정** 시각(= 통화 종료 무렵) |
 | `camera/` | `^camera_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<orig>.+)$` | **촬영** 시각 (DATE_TAKEN, 없으면 수정 시각) |
 | `index/` | `^index_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜에 업로드한** 것들의 기록 |
+| `index/` | `^index_snapshot_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.jsonl$` | 그 **시점의 재고 목록**. 한 번만 생긴다 |
 | `sms/` | `^sms_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
 | `kakao/` | `^kakao_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
 | `kakao/` | `^kakao_dump_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 진단 덤프, 그 날짜 하루치 |
@@ -267,13 +268,14 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 **업로드에 성공한 파일마다 한 줄씩** 남는다. 그날 올린 것이 그날 파일에 모인다.
 
 ```json
-{"t":1788696199293,"name":"camera_2025-10-13_15-14-07_20251013_151407.jpg","folder":"camera",
- "bytes":4336757,"driveId":"1-uOJVYfNH8JkBa7f5o5SfkV0QTVcF9Jf",
+{"kind":"upload","t":1788696199293,"name":"camera_2025-10-13_15-14-07_20251013_151407.jpg",
+ "folder":"camera","bytes":4336757,"driveId":"1-uOJVYfNH8JkBa7f5o5SfkV0QTVcF9Jf",
  "md5":"4dccdf83151865a1fc6daf5a9c818bb2","src":"camera:img:1000012952"}
 ```
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
+| `kind` | string | `"upload"` (한 건 올릴 때마다) \| `"snapshot"` (재고 목록, 아래) |
 | `t` | int (epoch ms) | **업로드가 끝난 시각.** 내용이 만들어진 시각이 아니다 |
 | `name` | string | 파일 이름. 내용 시각은 여기에 들어 있다 (2.1) |
 | `folder` | string | `audio` \| `screen` \| `call` \| `camera` \| `sms` \| `kakao` \| `kakaomedia` |
@@ -293,6 +295,20 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 
 **오늘치는 없다.** 오늘 올린 것은 `rawindex_<오늘>.jsonl.part`로 로컬에 쌓이는 중이고,
 날이 바뀌어야 확정돼 업로드된다. 즉 **기록은 항상 하루 늦게 도착한다.**
+
+#### 재고 목록 `index_snapshot_<시각>.jsonl`
+
+기록 기능은 2026-09-06에 들어갔다. **그 이전에 올라간 것은 일별 기록에 없다.**
+대신 그 시점에 Drive에 있던 파일 전체를 한 번 훑어 `kind:"snapshot"`으로 남겼다
+(실측 1,468건: call 1237, camera 150, sms 32, audio 23, screen 16, kakao 5, kakaomedia 5).
+
+일별 기록과 스키마는 같고 둘만 다르다.
+
+- `t`는 업로드가 끝난 시각이 아니라 **Drive에 파일이 만들어진 시각**이다 (실질적으로 같다)
+- **`src`가 항상 `null`이다.** 그때의 원본 식별자는 앱 설정에만 있었고 기록되지 않았다.
+  따라서 이 목록은 재설치 후 복원의 근거로는 쓸 수 없다
+
+이 파일은 한 번만 생긴다. 즉 **`index_snapshot_*` 이전의 수집 이력은 이 한 파일이 전부다.**
 
 ---
 

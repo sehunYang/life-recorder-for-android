@@ -53,6 +53,8 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             val folders = ensureFolders(ctx, client)
 
             if (IndexRestore.ensureRestored(ctx, client, folders.getValue("index"))) {
+                // 기록 기능 이전에 올라간 파일들의 재고 목록을 한 번 남긴다.
+                IndexSnapshot.runOnce(ctx, client, folders)
                 importCallRecordings(ctx)
                 importCameraMedia(ctx)
                 exportSms(ctx)

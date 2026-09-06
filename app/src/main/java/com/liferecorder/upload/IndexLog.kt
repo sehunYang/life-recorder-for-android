@@ -40,6 +40,7 @@ object IndexLog {
     fun record(ctx: Context, name: String, folder: String, bytes: Long, driveId: String, md5: String?, src: String?) {
         val now = System.currentTimeMillis()
         val record = JSONObject()
+            .put("kind", "upload")
             .put("t", now)
             .put("name", name)
             .put("folder", folder)

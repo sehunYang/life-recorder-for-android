@@ -65,16 +65,23 @@ class DriveClient(private val token: String) {
         http.newCall(req).execute().use { r -> return JSONObject(check(r)).getString("id") }
     }
 
-    data class Entry(val id: String, val name: String)
+    data class Entry(
+        val id: String,
+        val name: String,
+        val bytes: Long,
+        val md5: String?,
+        /** Drive에 만들어진 시각(= 업로드 시각). 파싱 못 하면 0. */
+        val createdMs: Long,
+    )
 
-    /** 폴더 안의 파일 목록. 수집 기록(index)을 되읽을 때 쓴다. 페이지를 끝까지 따라간다. */
+    /** 폴더 안의 파일 목록. 수집 기록을 되읽거나 소급 기록을 만들 때 쓴다. 페이지를 끝까지 따라간다. */
     fun listFiles(parentId: String): List<Entry> {
         val out = ArrayList<Entry>()
         var pageToken: String? = null
         do {
             val b = "$API/files".toHttpUrl().newBuilder()
                 .addQueryParameter("q", "'$parentId' in parents and trashed = false")
-                .addQueryParameter("fields", "nextPageToken,files(id,name)")
+                .addQueryParameter("fields", "nextPageToken,files(id,name,size,md5Checksum,createdTime)")
                 .addQueryParameter("pageSize", "1000")
             if (pageToken != null) b.addQueryParameter("pageToken", pageToken)
             http.newCall(authed(b.build().toString()).get().build()).execute().use { r ->
@@ -82,12 +89,24 @@ class DriveClient(private val token: String) {
                 val files = o.getJSONArray("files")
                 for (i in 0 until files.length()) {
                     val f = files.getJSONObject(i)
-                    out += Entry(f.getString("id"), f.optString("name"))
+                    out += Entry(
+                        id = f.getString("id"),
+                        name = f.optString("name"),
+                        bytes = f.optString("size").toLongOrNull() ?: 0L,
+                        md5 = f.optString("md5Checksum").ifEmpty { null },
+                        createdMs = parseTime(f.optString("createdTime")),
+                    )
                 }
                 pageToken = o.optString("nextPageToken").ifEmpty { null }
             }
         } while (pageToken != null)
         return out
+    }
+
+    private fun parseTime(s: String): Long = try {
+        if (s.isEmpty()) 0L else java.time.Instant.parse(s).toEpochMilli()
+    } catch (e: Exception) {
+        0L
     }
 
     /** 파일 하나를 텍스트로 내려받는다. 수집 기록은 작아서 통째로 읽어도 된다. */
