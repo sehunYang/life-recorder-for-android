@@ -15,6 +15,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import com.liferecorder.AppScope
+import com.liferecorder.Config
 import com.liferecorder.Notifications
 import com.liferecorder.Prefs
 import com.liferecorder.RecorderState
@@ -56,13 +57,29 @@ class RecordingService : Service() {
         }
     }
 
+    /** 뜨거워지면 즉시 끊고, 식으면 잠시 기다렸다가 붙인다 (경계에서 왔다 갔다 하지 않도록). */
     private val thermalListener = PowerManager.OnThermalStatusChangedListener { status ->
-        val hot = status >= PowerManager.THERMAL_STATUS_MODERATE
-        if (hot != thermalHot) {
-            thermalHot = hot
-            Log.i(TAG, "thermal status=$status hot=$hot")
-            main.post { applyCaptureGate() }
+        val hot = status >= Config.SCREEN_PAUSE_THERMAL
+        main.post {
+            main.removeCallbacks(thermalResume)
+            when {
+                hot && !thermalHot -> {
+                    thermalHot = true
+                    Log.i(TAG, "thermal status=$status, pausing screen capture")
+                    applyCaptureGate()
+                }
+                !hot && thermalHot -> {
+                    Log.i(TAG, "thermal status=$status, resuming in ${Config.SCREEN_THERMAL_RESUME_DELAY_MS / 1000}s")
+                    main.postDelayed(thermalResume, Config.SCREEN_THERMAL_RESUME_DELAY_MS)
+                }
+            }
         }
+    }
+
+    private val thermalResume = Runnable {
+        thermalHot = false
+        Log.i(TAG, "thermal cooled, resuming screen capture")
+        applyCaptureGate()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -71,7 +88,7 @@ class RecordingService : Service() {
         super.onCreate()
         val pm = getSystemService(PowerManager::class.java)
         screenOn = pm.isInteractive
-        thermalHot = pm.currentThermalStatus >= PowerManager.THERMAL_STATUS_MODERATE
+        thermalHot = pm.currentThermalStatus >= Config.SCREEN_PAUSE_THERMAL
         pm.addThermalStatusListener(mainExecutor, thermalListener)
         registerReceiver(
             screenReceiver,
@@ -263,6 +280,7 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
+        main.removeCallbacks(thermalResume)
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         try { getSystemService(PowerManager::class.java).removeThermalStatusListener(thermalListener) } catch (_: Exception) {}
         audio?.stop()

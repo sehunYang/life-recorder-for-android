@@ -18,6 +18,14 @@ object Config {
     /** 화면이 멈춰 있어도 이 간격마다 이전 프레임을 반복 인코딩해 타임라인이 끊기지 않게 한다. 길수록 인코더가 덜 깨어난다. */
     const val SCREEN_REPEAT_FRAME_US = 10_000_000L
 
+    /** 이 발열 단계 이상이면 화면 캡처 입력을 끊는다 (PowerManager.THERMAL_STATUS_*). 소리는 계속. */
+    const val SCREEN_PAUSE_THERMAL = android.os.PowerManager.THERMAL_STATUS_MODERATE
+    /**
+     * 발열이 기준 아래로 내려간 뒤 이만큼 지나야 캡처를 다시 붙인다.
+     * 바로 붙이면 경계에서 켜졌다 꺼졌다를 반복해 열이 빠질 틈이 없다.
+     */
+    const val SCREEN_THERMAL_RESUME_DELAY_MS = 3 * 60_000L
+
     /** 정각까지 남은 시간이 이보다 짧으면 다음 정각까지 하나의 세그먼트로 합친다. */
     const val MIN_SEGMENT_MS = 5_000L
 

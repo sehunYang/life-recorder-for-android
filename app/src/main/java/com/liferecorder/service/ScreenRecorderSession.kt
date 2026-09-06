@@ -128,6 +128,11 @@ class ScreenRecorderSession(
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, Config.SCREEN_IFRAME_INTERVAL_SEC)
             setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, Config.SCREEN_FPS.toFloat())
             setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, Config.SCREEN_REPEAT_FRAME_US)
+            // 전력 힌트. 실시간이 아니라고(1) 알리고 처리율을 5fps로 못 박으면 코덱이 클럭을 낮춘다.
+            // VBR은 정지 화면에서 비트를 덜 쓴다. 지원하지 않는 코덱은 무시할 뿐 실패하지 않는다.
+            setInteger(MediaFormat.KEY_PRIORITY, 1)
+            setInteger(MediaFormat.KEY_OPERATING_RATE, Config.SCREEN_FPS)
+            setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
         }
         val c = MediaCodec.createEncoderByType(MIME)
         c.setCallback(codecCallback, handler)
