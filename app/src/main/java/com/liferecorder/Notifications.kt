@@ -18,6 +18,7 @@ object Notifications {
     const val ID_SCREEN_STOPPED = 2
     const val ID_RESUME = 3
     const val ID_DRIVE = 4
+    const val ID_IMPORT = 5
 
     private fun nm(ctx: Context) = ctx.getSystemService(NotificationManager::class.java)
 
@@ -70,6 +71,23 @@ object Notifications {
 
     fun showDriveLoginNeeded(ctx: Context) =
         alert(ctx, ID_DRIVE, "Google Drive 연결 필요", "업로드가 멈춰 있습니다 · 탭하여 연결", MainActivity.ACT_LINK_DRIVE, CH_UPLOAD)
+
+    /**
+     * 공유로 받은 파일의 가져오기 결과.
+     * 가져오기 창은 투명이라 화면에 아무것도 안 보이고 토스트는 공유 시트가 닫히는 사이에
+     * 묻히기 쉬워서, 놓쳐도 확인할 수 있도록 알림으로 남긴다. 무음 채널이다.
+     */
+    fun showImportResult(ctx: Context, title: String, detail: String) {
+        val n = Notification.Builder(ctx, CH_UPLOAD)
+            .setSmallIcon(R.drawable.ic_rec)
+            .setContentTitle(title)
+            .setContentText(detail)
+            .setStyle(Notification.BigTextStyle().bigText(detail))
+            .setAutoCancel(true)
+            .setContentIntent(openApp(ctx, null))
+            .build()
+        nm(ctx).notify(ID_IMPORT, n)
+    }
 
     fun cancel(ctx: Context, id: Int) = nm(ctx).cancel(id)
 

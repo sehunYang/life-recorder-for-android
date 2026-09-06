@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.work.ExistingWorkPolicy
+import com.liferecorder.Notifications
 import com.liferecorder.upload.UploadScheduler
 import kotlin.concurrent.thread
 
@@ -34,21 +35,19 @@ class KakaoImportActivity : Activity() {
             val results =
                 if (uris.isNotEmpty()) uris.map { KakaoImport.importUri(ctx, it) }
                 else listOf(KakaoImport.importText(ctx, body.orEmpty(), subject))
-            var ok = 0
-            var lastError: String? = null
-            for (r in results) {
-                when (r) {
-                    is KakaoImport.Outcome.Ok -> ok++
-                    is KakaoImport.Outcome.Failed -> lastError = r.reason
-                }
+            val done = results.filterIsInstance<KakaoImport.Outcome.Ok>()
+            val lastError = results.filterIsInstance<KakaoImport.Outcome.Failed>().lastOrNull()?.reason
+            if (done.isNotEmpty()) UploadScheduler.enqueueNow(ctx, ExistingWorkPolicy.REPLACE, manual = true)
+
+            val title = if (done.isNotEmpty()) "카카오톡 대화 ${done.size}개 가져옴" else "가져오지 못했습니다"
+            val detail = if (done.isNotEmpty()) {
+                done.joinToString("\n") { "${it.fileName} (${fmtBytes(it.bytes)})" } + "\n업로드 대기열에 넣었습니다"
+            } else {
+                lastError ?: "가져올 내용이 없습니다"
             }
-            if (ok > 0) UploadScheduler.enqueueNow(ctx, ExistingWorkPolicy.REPLACE, manual = true)
+            Notifications.showImportResult(ctx, title, detail)
             runOnUiThread {
-                val msg = when {
-                    ok > 0 -> "파일 ${ok}개를 업로드 대기열에 넣었습니다"
-                    else -> lastError ?: "가져오지 못했습니다"
-                }
-                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, title, Toast.LENGTH_LONG).show()
                 finish()
             }
         }
@@ -67,4 +66,9 @@ class KakaoImportActivity : Activity() {
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+}
+
+private fun fmtBytes(b: Long) = when {
+    b >= 1L shl 20 -> "%.1f MB".format(b / (1L shl 20).toDouble())
+    else -> "${b / 1024} KB"
 }
