@@ -11,6 +11,9 @@ ON을 누르면 백그라운드에서 **주변 소리(마이크)** 와 **화면*
 서버도 계정도 필요 없고, 데이터는 **본인의 Google Drive에만** 올라간다.
 개발자를 포함해 제3자에게 전송되는 것은 없다.
 
+컴퓨터 화면도 같이 남기고 싶으면 [Life Recorder for Windows](https://github.com/sehunYang/life-recorder-for-windows)를
+쓴다. **같은 Drive 폴더**로 올라가고 파일 이름 접두어(`pcscreen_`)로만 갈린다. DESIGN.md 2.3 참고.
+
 ---
 
 ## ⚠️ 먼저 읽을 것 — 법적·윤리적 경계

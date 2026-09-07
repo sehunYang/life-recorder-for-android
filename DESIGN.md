@@ -49,6 +49,7 @@ Drive 루트는 `LifeRecorder/`이고 종류별 하위 폴더로 나뉜다.
 LifeRecorder/
   audio/        audio_2026-09-04_13-00-00.m4a
   screen/       screen_2026-09-04_13-00-00.mp4
+                pcscreen_2026-09-04_13-00-00.mp4                     ← PC 화면. 아래 2.3 참고
   call/         call_2026-09-03_18-06-28_홍길동_01000000000_20260903180453.m4a
   camera/       camera_2026-05-22_07-45-13_20260522_074513.jpg
   sms/          sms_2026-09-03.jsonl
@@ -57,6 +58,7 @@ LifeRecorder/
                 kakao_2026-09-04_11-20-05_export_KakaoTalkChats.txt   ← 수동 내보내기
   kakao-media/  kakaoimg_2026-09-05_14-47-25_95_<방ID>_<해시>.jpg
   index/        index_2026-09-06.jsonl                                ← 수집 기록. 3.8 참고
+                pcindex_2026-09-06.jsonl                              ← PC가 남긴 수집 기록
 ```
 
 > 로컬 폴더명은 `kakaomedia`, **Drive 폴더명은 `kakao-media`** 로 다르다. Drive 쪽 이름을 쓴다.
@@ -70,9 +72,11 @@ LifeRecorder/
 |---|---|---|
 | `audio/` | `^audio_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.(m4a\|aac)$` | 세그먼트 **시작** 시각 |
 | `screen/` | `^screen_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.mp4$` | 세그먼트 **시작** 시각 |
+| `screen/` | `^pcscreen_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.mp4$` | **PC 화면** 세그먼트 시작 시각 (2.3) |
 | `call/` | `^call_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<orig>.+)$` | 원본 파일의 **최종 수정** 시각(= 통화 종료 무렵) |
 | `camera/` | `^camera_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<orig>.+)$` | **촬영** 시각 (DATE_TAKEN, 없으면 수정 시각) |
 | `index/` | `^index_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜에 업로드한** 것들의 기록 |
+| `index/` | `^pcindex_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | **PC가** 그 날짜에 업로드한 것들의 기록 (2.3) |
 | `index/` | `^index_snapshot_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.jsonl$` | 그 **시점의 재고 목록**. 한 번만 생긴다 |
 | `sms/` | `^sms_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
 | `kakao/` | `^kakao_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
@@ -93,6 +97,27 @@ LifeRecorder/
 
 다만 그 반대 함의가 중요하다. **오늘치 카카오톡 로그와 오늘 날짜 문자는 아직 올라오지 않았다.**
 `kakao_<오늘>.jsonl`과 `sms_<오늘>.jsonl`이 없는 것은 정상이다. 결측으로 오해하지 말 것.
+
+### 2.3 `screen/`과 `index/`에는 PC가 남긴 것이 섞여 있다
+
+같은 사람의 **윈도우 PC 화면 기록**이 폰과 같은 폴더로 올라온다.
+폴더를 늘리지 않으려고 접두어로만 갈랐다.
+
+| 접두어 | 남긴 쪽 |
+|---|---|
+| `screen_`, `index_` | 이 앱 (안드로이드) |
+| `pcscreen_`, `pcindex_` | [Life Recorder for Windows](https://github.com/sehunYang/life-recorder-for-windows) |
+
+`screen/`을 훑을 때 `*.mp4`만 보고 전부 폰 화면으로 취급하면 안 된다.
+폰만 원하면 `^screen_`, PC만 원하면 `^pcscreen_`로 **완전 일치**를 걸 것.
+
+PC 쪽 파일의 성격은 폰과 꽤 다르다 — 소리가 없고, 2fps이고, **해상도가 고정이 아니며**
+(모니터를 전부 이어 붙인 한 프레임이라 모니터 구성이 바뀌면 같이 바뀐다),
+잠금·절전 구간이 통째로 비어 있다.
+자세한 것은 [윈도우 쪽 DESIGN.md](https://github.com/sehunYang/life-recorder-for-windows/blob/main/DESIGN.md)에 있다.
+
+`index/`는 서로 읽지 않는다. 이 앱의 `IndexRestore`(3.8)는 `index_`로 시작하는 파일만 읽으므로
+`pcindex_`를 건드리지 않고, 반대도 마찬가지다.
 
 ---
 
