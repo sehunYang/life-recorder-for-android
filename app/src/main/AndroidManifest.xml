@@ -87,6 +87,19 @@
             </intent-filter>
         </activity>
 
+        <!-- 홈 화면 2x1 위젯. 누를 때마다 기록이 켜지고 꺼진다. -->
+        <receiver
+            android:name=".widget.RecordWidget"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_record_info" />
+        </receiver>
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

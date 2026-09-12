@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  갤럭시 홈 화면 기준 2칸 x 1칸.
+  targetCellWidth/Height가 실제 배치 크기를 정하고, minWidth/minHeight는
+  그 값을 못 읽는 런처를 위한 예비값이다 (칸 n개 = 70*n-30 dp).
+  updatePeriodMillis=0: 주기 갱신은 하지 않는다. 상태가 바뀔 때 서비스가 직접 갱신한다.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_record"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:previewLayout="@layout/widget_record"
+    android:resizeMode="horizontal"
+    android:targetCellHeight="1"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 배경(기록 중). 앱의 Tone.Recording(0xFFE53935)과 같은 빨강. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFE53935" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

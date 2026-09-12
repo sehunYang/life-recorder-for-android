@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.liferecorder.Notifications
 import com.liferecorder.Prefs
+import com.liferecorder.widget.RecordWidget
 
 /**
  * 화면 녹화 동의만 받아 서비스에 넘기고 곧바로 사라지는 투명 액티비티.
@@ -30,6 +31,7 @@ class ProjectionRequestActivity : ComponentActivity() {
             } else {
                 Log.w(TAG, "projection request denied")
                 Prefs.setScreenWasRecording(this, false)
+                RecordWidget.refresh(this)
                 Notifications.showScreenStopped(this, "화면 녹화 권한이 거부되었습니다")
             }
             finish()

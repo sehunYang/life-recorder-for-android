@@ -20,6 +20,7 @@ import com.liferecorder.Prefs
 import com.liferecorder.RecorderState
 import com.liferecorder.Storage
 import com.liferecorder.upload.UploadScheduler
+import com.liferecorder.widget.RecordWidget
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -202,6 +203,7 @@ class RecordingService : Service() {
                 screenStoppedReason = null, screenPausedReason = null,
             )
         }
+        RecordWidget.refresh(this)
         val finish = {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -209,8 +211,10 @@ class RecordingService : Service() {
         if (s != null) s.stop(finish) else finish()
     }
 
+    /** 알림과 홈 화면 위젯을 지금 상태에 맞춘다. 기록 상태가 바뀔 때마다 부른다. */
     private fun updateNotification() {
         Notifications.updateOngoing(this, audio != null, screen != null)
+        RecordWidget.refresh(this)
     }
 
     private val audioListener = object : AudioRecorderSession.Listener {

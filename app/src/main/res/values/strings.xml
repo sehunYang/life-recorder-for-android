@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Life Recorder</string>
+
+    <!-- 위젯 고르는 화면에 보이는 이름과 설명 -->
+    <string name="widget_label">기록 시작·중지</string>
+    <string name="widget_description">한 번 눌러 기록을 시작하고, 한 번 더 눌러 끕니다.</string>
+
+    <!-- 위젯에 적히는 글. 켜짐 쪽은 상황에 따라 코드가 골라 넣는다. -->
+    <string name="widget_off_title">기록 꺼짐</string>
+    <string name="widget_off_sub">눌러서 시작</string>
+    <string name="widget_on_title">기록 중</string>
+    <string name="widget_on_sub_audio">소리만 · 눌러서 중지</string>
+    <string name="widget_on_sub_both">소리 + 화면 · 눌러서 중지</string>
 </resources>

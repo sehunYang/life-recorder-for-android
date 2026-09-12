@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 배경(꺼짐). 배경화면이 밝든 어둡든 글씨가 읽히도록 색을 고정한다. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#E62B2B2E" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>
