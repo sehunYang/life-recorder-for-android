@@ -50,8 +50,11 @@ adb install -r "app\build\outputs\apk\debug\app-debug.apk"
 3. **기록 시작 (ON)** → 권한 요청이 순서대로 뜬다. 전부 허용
    - 마이크, 알림, 음악 및 오디오(통화 녹음 읽기), SMS, 연락처
 4. **화면 녹화 동의 팝업** → "전체 화면" 선택 후 시작
+5. 카카오톡 카드의 **접근성 설정 열기** → 설치된 앱 > Life Recorder 켜기 → 뒤로
+6. 함께 모으기 카드의 **사용 정보 접근 허용하기** → 목록에서 Life Recorder 켜기 → 뒤로
 
 상단 알림에 `녹음 중 · 화면 녹화 중`이 보이면 정상이다.
+카카오톡 카드에 "카카오톡 화면에 보이는 글자를 그대로 모으는 중", 앱 사용 기록 줄에 권한 문구가 사라지면 5·6번도 된 것이다.
 
 ## 4단계. 안 죽게 만드는 폰 설정
 
@@ -174,6 +177,52 @@ adb exec-out run-as com.liferecorder cat /sdcard/Android/data/com.liferecorder/f
 
 듀얼 메신저(카카오톡 2개)는 **기본 앱 하나로 둘 다 잡힌다.** 레코드의 `user` 필드가
 `"0"`(기본) / `"95"`(듀얼)로 구분해 준다. 듀얼 공간에 Life Recorder를 따로 설치할 필요 없다.
+
+### 6단계 추가 결과 (2026-09-17, 메시지 5,176건 / 덤프 114건 기준)
+
+| 질문 | 결론 |
+|---|---|
+| 2. 포그라운드 | 여전히 미검증. `channel` 값의 70%가 `quiet_new_message`라 조용한 알림은 잡히는데, 그것이 방을 열어 둔 상태인지는 6-1단계 시나리오로 확인한다 |
+| 6. 방 이름 | 알림 extras의 `android.hiddenConversationTitle`·`subText`·`infoText`도 전부 null. **알림에는 방 이름이 없다.** 화면 읽기(6-1)의 `title`로 얻는다 |
+| 6. 사람 키 | `person.key`는 **방마다 다르다.** 같은 이름에 키 3~4개가 붙고 방별로 갈린다. 받는 계정 자신의 키도 방마다 다르다. 사람 단위 안정 키는 카카오톡이 주지 않는다 |
+| 7. 중복 | extras에 카카오톡이 넣는 **`chatLogId`** (메시지 고유 번호)가 있다. 이제 이걸 기록하고 중복 제거 키로 쓴다. 앱 재시작 뒤 같은 알림이 와도 같은 값이다 |
+| 9. 계정 | 두 계정이 계속 같이 수집된다 (`user` 0 약 90%, 95 약 10%). `me` 필드가 각 계정의 표시 이름이라 어느 쪽인지 바로 보인다 |
+
+## 6-1단계. 화면 읽기와 앱 사용 기록 확인
+
+접근성 서비스와 사용 정보 접근이 실제로 파일을 만드는지 본다. 3단계 5·6번이 먼저다.
+
+**화면 읽기**
+
+1. 로그 창: `adb logcat -s KakaoA11y KakaoScreenLog`
+2. 카카오톡에서 **그룹채팅방 하나를 연다** → 몇 초 뒤 로그가 찍히는지
+3. **내가 메시지 한 건 보낸다** → 다시 찍히는지
+4. 방을 나갔다 다른 방을 연다
+5. 파일 확인:
+```powershell
+adb shell ls -l /sdcard/Android/data/com.liferecorder/files/kakaoscreen
+adb exec-out run-as com.liferecorder cat /sdcard/Android/data/com.liferecorder/files/kakaoscreen/rawkakaoscreen_<오늘>.jsonl.part
+```
+
+| 볼 곳 | 기대 |
+|---|---|
+| `title` | 2번에서 연 방의 **이름** (알림에는 없던 것) |
+| `nodes[].text` | 3번에서 보낸 **내 메시지 본문** |
+| `nodes[].l`, `r` | 내 메시지는 `r`이 화면 폭 근처, 상대 메시지는 `l`이 0 근처 |
+| `activity` | 채팅방이면 `…ChatRoomActivity` |
+| 줄 수 | 화면이 바뀔 때마다 한 줄. 가만히 두면 늘지 않아야 한다 (30초 안에 본 글자는 다시 안 쓴다) |
+
+`vid` 값은 카카오톡 버전에 따라 다르다. 어떤 값이 말풍선인지는 이 파일을 보고 소비자 쪽에서 정한다.
+
+**앱 사용 기록**
+
+앱 사용 기록은 문자처럼 **어제까지만** 만든다. 켠 당일에는 파일이 없는 것이 정상이다.
+바로 확인하려면 켜고 하루 지난 뒤 **지금 업로드**를 누르고:
+```powershell
+adb shell ls -l /sdcard/Android/data/com.liferecorder/files/app
+```
+`app_<어제>.jsonl`이 있고, 안에 `resumed`/`screen_off`/`keyguard_shown` 줄이 시각순으로 있으면 된다.
+처음 켜면 최대 7일 전까지 거슬러 만든다 (시스템이 들고 있는 만큼만).
 
 ## 7단계. 마무리
 

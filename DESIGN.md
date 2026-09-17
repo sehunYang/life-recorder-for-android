@@ -8,6 +8,7 @@
 
 관측 시점: 2026-09-06. 실제 기기(Galaxy Z Flip 5, Android 16 / One UI 8.5)에서
 카카오톡 메시지 277건·알림 덤프 9건·오디오 7.5시간을 관찰해 확인했다.
+2026-09-17에 메시지 5,176건·덤프 114건으로 다시 확인해 5.7과 3.9·3.10을 더했다.
 **추측과 관찰을 구분해서 적었다. "미확인"이라고 쓴 것은 검증하지 않은 것이다.**
 
 > 이 문서의 이름·번호·방 ID 예시는 모두 가명·더미 값으로 바꾼 것이다.
@@ -24,7 +25,7 @@
 앱은 **모으기만 하고 해석하지 않는다.** 합치고 복원하고 중복을 제거하는 일은
 이 데이터를 받는 쪽, 즉 이 문서를 읽는 에이전트의 몫이다.
 
-### 수집 대상 6종
+### 수집 대상 8종
 
 | 종류 | 출처 | 성격 | 도착 지연 |
 |---|---|---|---|
@@ -33,7 +34,9 @@
 | 통화 녹음 | 폰이 만든 파일을 복사 | 이벤트, 사후 수집 | 통화 종료 후 최소 1분 |
 | 카메라 사진·동영상 | `DCIM/Camera`를 복사 | 이벤트, 사후 수집 | 촬영 후 최소 1분, 소급분은 며칠 |
 | 문자(SMS/MMS) | ContentProvider | 이벤트, 하루 단위 내보내기 | **다음 날** |
-| 카카오톡 | 알림 가로채기 | 이벤트, 실시간만 | **다음 날** (파일 확정 기준) |
+| 카카오톡 알림 | 알림 가로채기 | 이벤트, 실시간만 | **다음 날** (파일 확정 기준) |
+| 카카오톡 화면 | 접근성 서비스 | 이벤트, 화면이 바뀔 때만 | **다음 날** (3.10) |
+| 앱 사용 | 시스템 UsageEvents | 이벤트, 하루 단위 내보내기 | **다음 날** (3.9) |
 
 업로드는 기본적으로 **Wi-Fi + 충전 중**에만 돈다.
 즉 데이터는 실시간이 아니라 **하루 단위로 몰려서 도착한다.** 실시간 소비를 전제하면 안 된다.
@@ -59,6 +62,8 @@ LifeRecorder/
   kakao-media/  kakaoimg_2026-09-05_14-47-25_95_<방ID>_<해시>.jpg
   index/        index_2026-09-06.jsonl                                ← 수집 기록. 3.8 참고
                 pcindex_2026-09-06_home.jsonl                         ← PC가 남긴 수집 기록
+  app/          app_2026-09-06.jsonl                                  ← 어느 앱이 앞에 있었나. 3.9 참고
+  kakao-screen/ kakaoscreen_2026-09-06.jsonl                          ← 접근성이 읽은 카카오톡 화면 글자. 3.10 참고
 ```
 
 > 로컬 폴더명은 `kakaomedia`, **Drive 폴더명은 `kakao-media`** 로 다르다. Drive 쪽 이름을 쓴다.
@@ -84,6 +89,8 @@ LifeRecorder/
 | `kakao/` | `^kakao_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_export_(?<orig>.+)$` | 사용자가 **가져온 시각** |
 | `kakao-media/` | `^kakaoimg_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<user>\d+)_(?<room>[A-Za-z0-9_-]+)_(?<hash>[A-Za-z0-9_-]+)\.(jpg\|png\|gif\|webp\|bin)$` | 메시지 **발화** 시각 |
 | `kakao-media/` | `^kakaoexp_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<orig>.+)$` | 사용자가 **가져온 시각** (3.7) |
+| `app/` | `^app_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
+| `kakao-screen/` | `^kakaoscreen_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
 
 **`kakao/` 폴더를 훑을 때 주의.** 세 종류가 한 폴더에 섞여 있고 셋 다 `kakao_`로 시작한다.
 `kakao_dump_`를 먼저 걸러내고, 그다음 `_export_` 포함 여부를 보고, 남은 것이 일별 로그다.
@@ -150,9 +157,13 @@ PC 쪽 파일의 성격은 폰과 꽤 다르다 — 소리가 없고, 2fps이고
  "group":"chat_message","channel":"new_message_v6",
  "t":1788587212132,"room":"홍길동","sender":"홍길동","text":"점심 먹었어?",
  "style":"messaging","fromMe":false,"historic":false,"isGroup":false,
- "senderKey":"<안정적인 사람 식별자>","senderUri":null,
+ "senderKey":"<이 방 안에서의 사람 식별자>","senderUri":null,
+ "me":"<이 알림을 받은 계정의 표시 이름>","meKey":"<그 계정의 이 방 안 식별자>",
+ "chatLogId":"3923230618582036480",
  "dataMimeType":"image/","dataUri":"content://...","mediaFile":"kakaoimg_....jpg"}
 ```
+
+`me`·`meKey`·`chatLogId`는 2026-09-17 이후 파일에만 있다. 그 전 파일에는 키 자체가 없다.
 
 | 필드 | 타입 | 의미 | 신뢰도 |
 |---|---|---|---|
@@ -164,8 +175,11 @@ PC 쪽 파일의 성격은 폰과 꽤 다르다 — 소리가 없고, 2fps이고
 | `roomId` | string | **방의 고유 ID** (알림의 shortcutId) | 확실. 방 식별은 반드시 이걸로 |
 | `room` | string \| **null** | 방 이름 | **믿지 마라.** 그룹은 항상 `null` |
 | `sender` | string | 보낸 사람 표시 이름 | 표시용. 개명·별명 변경에 흔들린다 |
-| `senderKey` | string \| null | 사람의 안정적 식별자 | 동일인 판정은 이걸로 |
-| `senderUri` | string \| null | 연락처 URI | 대개 `null` |
+| `senderKey` | string \| null | **이 방 안에서** 그 사람을 가리키는 값 | 같은 방 안에서만 안정. **방이 다르면 같은 사람도 값이 다르다.** 5.7 참고 |
+| `senderUri` | string \| null | 연락처 URI | **항상 `null`** (5,176건 실측) |
+| `me` | string \| null | 이 알림을 받은 계정의 카카오톡 표시 이름 | 듀얼 메신저면 `user`마다 다르다. 계정을 사람이 알아보는 이름 |
+| `meKey` | string \| null | 받은 계정의 이 방 안 식별자 | `senderKey`와 같은 성질. 방마다 다르다 |
+| `chatLogId` | string \| null | **카카오톡이 메시지마다 붙인 고유 번호** | **메시지 유일성은 이걸로.** 알림이 같은 메시지를 다시 실어도 같다. 문자열이다 (JS 안전 정수 초과) |
 | `text` | string | 본문. 빈 문자열일 수 있다 | — |
 | `fromMe` | bool | 내가 보낸 것인지 | **항상 `false`.** 5.1 참고 |
 | `historic` | bool | 과거 메시지가 다시 실려온 것인지 | **항상 `false`.** 5.4 참고 |
@@ -176,8 +190,8 @@ PC 쪽 파일의 성격은 폰과 꽤 다르다 — 소리가 없고, 2fps이고
 | `key` | string | 알림 고유 키 `<user>\|<pkg>\|<id>\|<tag>\|<uid>` | 원본 보존용 |
 | `tag`, `id`, `shortcut`, `group`, `channel` | — | 알림 원본 식별값 | 원본 보존용. 보통 안 쓴다 |
 
-`room`, `senderKey`, `senderUri`, `dataMimeType`, `dataUri`, `mediaFile`은 값이 없으면
-**JSON `null`로 들어온다.** 키 자체가 빠지지는 않는다.
+`room`, `senderKey`, `senderUri`, `me`, `meKey`, `chatLogId`, `dataMimeType`, `dataUri`, `mediaFile`은
+값이 없으면 **JSON `null`로 들어온다.** 키 자체가 빠지지는 않는다 (2026-09-17 이전 파일의 새 키 셋은 예외).
 
 ### 3.3 `kind: "message"`, `style: "plain"` — 축약 경로
 
@@ -307,7 +321,7 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 | `kind` | string | `"upload"` (한 건 올릴 때마다) \| `"snapshot"` (재고 목록, 아래) |
 | `t` | int (epoch ms) | **업로드가 끝난 시각.** 내용이 만들어진 시각이 아니다 |
 | `name` | string | 파일 이름. 내용 시각은 여기에 들어 있다 (2.1) |
-| `folder` | string | `audio` \| `screen` \| `call` \| `camera` \| `sms` \| `kakao` \| `kakaomedia` |
+| `folder` | string | `audio` \| `screen` \| `call` \| `camera` \| `sms` \| `kakao` \| `kakaomedia` \| `app` \| `kakaoscreen` |
 | `bytes` | int | 크기 |
 | `driveId` | string | Drive 파일 ID. 파일이 살아 있는 동안 바로 찾을 수 있다 |
 | `md5` | string \| null | Drive가 돌려준 체크섬. 같은 내용인지 대조할 때 |
@@ -338,6 +352,63 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
   따라서 이 목록은 재설치 후 복원의 근거로는 쓸 수 없다
 
 이 파일은 한 번만 생긴다. 즉 **`index_snapshot_*` 이전의 수집 이력은 이 한 파일이 전부다.**
+
+### 3.9 앱 사용 `app_<날짜>.jsonl`
+
+어느 앱이 앞에 떠 있었는지, 화면이 켜지고 잠긴 시각. 시스템의 UsageEvents를 그대로 옮긴 것이다.
+한 줄에 사건 하나, `t` 오름차순.
+
+```json
+{"t":1788500640000,"kind":"app","event":"resumed","pkg":"com.kakao.talk",
+ "cls":"com.kakao.talk.activity.chatroom.ChatRoomActivity","app":"카카오톡"}
+{"t":1788500700000,"kind":"app","event":"screen_off","pkg":"android","cls":null,"app":null}
+```
+
+| 필드 | 타입 | 의미 |
+|---|---|---|
+| `t` | int (epoch ms) | 사건 시각 |
+| `kind` | string | 항상 `"app"` |
+| `event` | string | `resumed` \| `paused` \| `stopped` \| `screen_on` \| `screen_off` \| `keyguard_shown` \| `keyguard_hidden` \| `shutdown` \| `startup` |
+| `pkg` | string | 패키지명. 화면·잠금 사건은 `"android"` |
+| `cls` | string \| null | 액티비티 클래스. 앱 사건에만 |
+| `app` | string \| null | 사람이 읽는 앱 이름. 지워진 앱이면 `null` |
+
+- **`resumed` 사이의 구간이 "그 앱이 앞에 있던 시간"이다.** `paused`/`stopped`는 보조
+- `screen_off` → `screen_on` 사이와 `keyguard_shown` → `keyguard_hidden` 사이가 **화면 mp4에서 프레임이 반복되는 구간의 정체**다 (4.2의 "꺼짐과 정지 화면을 구분할 수 없다"를 이 파일이 푼다)
+- 시스템이 남긴 것을 읽으므로 **이 앱이 죽어 있던 동안의 사건도 있다.** 다만 시스템은 며칠치만 들고 있어, 처음 켤 때 최대 7일까지만 거슬러 온다
+- 이 앱 자신(`com.liferecorder`)도 나온다. 걸러서 쓸 것
+
+### 3.10 카카오톡 화면 `kakaoscreen_<날짜>.jsonl`
+
+접근성 서비스가 **카카오톡 화면에 보이는 글자**를 뷰 계층에서 그대로 읽은 것이다. OCR이 아니라 원문이다.
+알림에 없는 셋 — **내가 보낸 메시지, 방을 열어 둔 동안 받은 메시지, 그룹방 이름** — 이 여기에 있다.
+사용자가 설정 > 접근성에서 켰을 때만 생긴다.
+
+```json
+{"kind":"screen","t":1788500640000,"activity":"com.kakao.talk.activity.chatroom.ChatRoomActivity",
+ "title":"감자의 서울나들이 5",
+ "nodes":[{"vid":"message","cls":"TextView","text":"점심 먹었어?","l":48,"t":1210,"r":520,"b":1290},
+          {"vid":"message","cls":"TextView","text":"응 먹었지","l":560,"t":1320,"r":1032,"b":1400}]}
+{"kind":"service","event":"connected","t":1788500000000}
+```
+
+| 필드 | 타입 | 의미 |
+|---|---|---|
+| `kind` | string | `"screen"` (한 번 읽은 결과) \| `"service"` (붙거나 끊긴 시점. 3.4와 같은 뜻) |
+| `t` | int (epoch ms) | 읽은 시각. **메시지가 보내진 시각이 아니다** |
+| `activity` | string \| null | 그때 앞에 있던 카카오톡 액티비티. 채팅방은 `ChatRoomActivity` |
+| `title` | string \| null | 창 제목. **채팅방이면 방 이름이다.** 알림에 없던 그룹방 이름이 여기서 나온다 |
+| `nodes[]` | object[] | 이번에 **새로 나타난** 글자 노드만. 이미 30초 안에 본 것은 다시 넣지 않는다 |
+| `nodes[].vid` | string \| null | 뷰 id (`com.kakao.talk:id/` 뗀 것). 카카오톡 버전에 따라 바뀐다 |
+| `nodes[].cls` | string | 뷰 클래스 짧은 이름 |
+| `nodes[].text` | string | 보이는 글자 그대로 |
+| `nodes[].l t r b` | int | 화면 좌표(px). **`l`이 작으면 왼쪽(상대), `r`이 화면 폭에 가까우면 오른쪽(나)** |
+
+- **해석은 소비자 몫이다.** 말풍선인지 시각 표시("오후 3:12")인지 날짜 구분선인지는 `vid`·좌표·내용으로 가른다. 앱은 고르지 않는다
+- 같은 방을 스크롤해 올리면 **옛 메시지가 다시 나타난다.** 알림 로그와 본문·순서로 대조해 걸러야 한다
+- 입력창(`EditText`)은 뺐다. 타자 치는 중간 상태가 계속 바뀌어 잡음만 되기 때문이다. 보낸 뒤 말풍선으로 잡힌다
+- 접근성 서비스는 카카오톡이 **앞에 떠 있을 때만** 읽는다. 뒤에 있으면 아무것도 안 생긴다. 알림 로그(3.2)와 상보적이다
+- `service` 레코드의 `disconnected` → `connected` 사이는 관측 불가 구간이다
 
 ---
 
@@ -424,7 +495,8 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 상대 발화만 있는 반쪽 로그다. 요약·회상을 설계할 때 이 전제를 반드시 반영해야 한다.
 **"사용자가 무엇을 말했는가"를 묻는 질문에 이 데이터로 답하면 안 된다.**
 
-보완 경로는 두 가지뿐이다.
+보완 경로는 세 가지다.
+- **화면 글자**(3.10). 접근성 서비스를 켜 두면 카카오톡을 보는 동안의 화면이 원문으로 남는다. 내 발화도 그대로. 2026-09-17 추가
 - **수동 내보내기 파일**(3.7). 내 발화가 들어 있지만 시점이 띄엄띄엄하다
 - **마이크 오디오**. 대면 대화라면 내 목소리가 녹음돼 있다. 카카오톡 대화에는 해당 없음
 
@@ -461,8 +533,13 @@ URI 읽기 권한이 프로필 경계를 넘지 않아서, 기본 프로필의 �
 실측: 그룹채팅 한 개(`roomId=2222222222222222`, 188건)의 title이
 `A`(103) / `B`(35) / `C`(33) / `D`(17)로 흩어졌다.
 
-→ **방 이름은 이 데이터로 알 수 없다.** `roomId`로 묶고, 이름은 사용자가 붙이거나
+→ **방 이름은 알림 데이터로 알 수 없다.** `roomId`로 묶고, 이름은 사용자가 붙이거나
 `sender` 분포로 추정해야 한다. 1:1 방은 `room`에 상대 이름이 들어와 있어 쓸 수 있다.
+
+2026-09-17 덤프 114건에서 `android.hiddenConversationTitle`·`android.subText`·`android.infoText`도
+전부 `null`임을 확인했다. 알림 extras 어디에도 방 이름은 없다.
+**방 이름은 화면 로그(3.10)의 `title`에 있다.** 채팅방을 여는 순간 `roomId` 없이 이름만 잡히므로,
+알림 로그의 `roomId`와는 그 방에서 오간 메시지 본문으로 잇는다.
 
 ### 5.4 알림이 실어 오는 양이 적다
 
@@ -487,6 +564,19 @@ URI 읽기 권한이 프로필 경계를 넘지 않아서, 기본 프로필의 �
 갤럭시 듀얼 메신저로 카카오톡 2개를 쓰면 **패키지명은 같고 안드로이드 사용자만 다르다**
 (기본 `"0"`, 복제 `"95"`). 앱 하나가 둘 다 받는다. `user` 필드로 갈라진다.
 **두 계정에 같은 이름의 방·사람이 있을 수 있으므로 `(user, roomId)` 쌍을 키로 써야 한다.**
+`me`(3.2)가 각 계정의 표시 이름이므로, `user` 번호가 어느 계정인지는 그것으로 알아본다.
+두 계정끼리 주고받은 1:1 방은 양쪽에 같은 `roomId`로 나타나고, 한쪽이 보낸 것이 다른 쪽에 `fromMe:false`로 남는다.
+
+### 5.7 `senderKey`는 사람이 아니라 "방 안의 사람"을 가리킨다 ← 2026-09-17 정정
+
+이 문서의 첫 판은 `senderKey`를 "동일인 판정 키"라고 적었다. **틀렸다.**
+5,176건에서 같은 표시 이름에 키가 3~4개 붙은 사람이 10명이고, 키마다 나타나는 방이 다르다.
+323개 키 중 두 방 이상에 걸친 것은 20개뿐이다. 받는 계정 자신의 `meKey`조차 방마다 다르다.
+
+→ **"키가 같으면 같은 사람"은 성립하지만 "키가 다르면 다른 사람"은 성립하지 않는다.**
+방을 가로지르는 동일인 판정은 이 데이터로 할 수 없다. 1:1 방이면 `roomId` 자체가 상대 한 사람을 가리키므로
+그것을 앵커로 쓰고, 나머지는 소비자가 이름·문맥으로 잇거나 사람에게 묻는다.
+카카오톡이 알림에 사람 단위 안정 키를 주지 않으므로 앱 쪽에서 더 할 수 있는 것은 없다.
 
 ---
 
@@ -498,8 +588,9 @@ URI 읽기 권한이 프로필 경계를 넘지 않아서, 기본 프로필의 �
 - Drive에 올라온 파일은 완성본이다. 쓰다 만 파일은 올라오지 않는다
 - 오디오는 정각 경계로 이어 붙이면 구멍 없는 연속 스트림이 된다 (실측: 7.5시간 무결점)
 - `(user, roomId)`는 방을 안정적으로 가리킨다
-- `senderKey`는 표시 이름이 바뀌어도 같은 사람을 가리킨다
-- `sms_<날짜>.jsonl` 한 파일 안은 `t` 오름차순이다
+- `senderKey`는 **같은 방 안에서는** 표시 이름이 바뀌어도 같은 사람을 가리킨다 (방을 넘으면 아니다. 5.7)
+- `chatLogId`는 메시지마다 유일하다. 알림이 같은 메시지를 다시 실어도 같은 값이다 (2026-09-17 이후 파일)
+- `sms_<날짜>.jsonl`·`app_<날짜>.jsonl` 한 파일 안은 `t` 오름차순이다
 - JSONL 각 줄은 독립적인 JSON이다. 한 줄이 깨져도 나머지는 읽을 수 있다
 
 ### 기대하면 안 되는 것
@@ -519,7 +610,7 @@ URI 읽기 권한이 프로필 경계를 넘지 않아서, 기본 프로필의 �
 **앱이 재시작되면 이 기억이 사라진다.** 재시작 직후 같은 알림이 다시 오면 같은 줄이 또 쌓인다.
 
 → **소비자가 다시 한 번 중복을 제거해야 한다.**
-권장 키: `(user, roomId, t, senderKey, text)`.
+권장 키: `chatLogId`가 있으면 `(user, chatLogId)`. 없는 옛 파일은 `(user, roomId, t, senderKey, text)`.
 `room`은 알림마다 흔들리므로 **키에 넣지 말 것.**
 실제로 이걸 키에 넣었다가 그룹채팅이 발신자 수만큼 쪼개지고 **전체의 21%가 중복 저장된 적이 있다.**
 
@@ -584,8 +675,10 @@ Drive는 같은 폴더에 동명 파일을 허용한다. 앱은 업로드 전에
 | 무엇을 묶나 | 키 |
 |---|---|
 | 카카오톡 대화방 | `(user, roomId)` |
-| 카카오톡 사람 | `(user, senderKey)` |
-| 카카오톡 메시지 유일성 | `(user, roomId, t, senderKey, text)` |
+| 카카오톡 사람 | `(user, roomId, senderKey)` — **방 안에서만.** 방을 넘는 동일인은 소비자가 잇는다 (5.7) |
+| 카카오톡 메시지 유일성 | `(user, chatLogId)`. 옛 파일은 `(user, roomId, t, senderKey, text)` |
+| 카카오톡 방 이름 | 화면 로그 `title` (3.10). 알림에는 없다 |
+| 앱 사용 구간 | `app` 파일의 `resumed` 사이 (3.9) |
 | 카카오톡 메시지 ↔ 사진 | `message.mediaFile` = `kakao-media/` 파일 이름 |
 | 문자 대화 | `thread`, 보조로 `address` |
 | 시간축 | 전부 epoch ms (`t`), 미디어는 파일명 시각 + 파일 내 오프셋 |
@@ -635,6 +728,7 @@ Drive는 같은 폴더에 동명 파일을 허용한다. 앱은 업로드 전에
 
 - 앱 동작 개요와 설정: `README.md`
 - 설치·검증 절차: `TESTING.md`
-- 주요 소스: `kakao/KakaoNotificationListener.kt`(알림 파싱), `kakao/KakaoMedia.kt`(사진),
-  `service/RecordingService.kt`(녹음·녹화 수명주기), `Storage.kt`(파일 이름 규약),
-  `upload/UploadWorker.kt`(업로드), `upload/SmsExporter.kt`(문자), `Config.kt`(품질·폴더 상수)
+- 주요 소스: `kakao/KakaoNotificationListener.kt`(알림 파싱), `kakao/KakaoAccessibilityService.kt`(화면 글자),
+  `kakao/KakaoMedia.kt`(사진), `service/RecordingService.kt`(녹음·녹화 수명주기), `Storage.kt`(파일 이름 규약),
+  `upload/UploadWorker.kt`(업로드), `upload/SmsExporter.kt`(문자), `upload/AppUsageExporter.kt`(앱 사용),
+  `Config.kt`(품질·폴더 상수)
