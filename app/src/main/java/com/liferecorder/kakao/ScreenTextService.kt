@@ -32,6 +32,8 @@ class ScreenTextService : AccessibilityService() {
     private var scanPending = false
     /** 최근에 본 노드(앱·창·글·위치 → 본 시각). 화면이 바뀔 때마다 전체를 다시 쓰지 않고 새로 나타난 것만 남긴다. */
     private val recent = LinkedHashMap<String, Long>(256, 0.75f, true)
+    /** 입력창(앱·뷰 id → 직전 스캔에서 본 글). 두 번 연속 같을 때만 남겨 타자 치는 중간 상태를 거른다. */
+    private val editing = HashMap<String, String>()
     private var lastActivity: String? = null
     private var lastPkg: String? = null
     private var lastTitle: String? = null
@@ -53,7 +55,8 @@ class ScreenTextService : AccessibilityService() {
         if (pkg == packageName) return
         if (!Prefs.isIncludeScreenText(this)) return
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            lastActivity = event.className?.toString()
+            // 대화상자·팝업도 같은 이벤트로 오고 그때 className 은 뷰 클래스다. 액티비티만 기억한다.
+            event.className?.toString()?.takeIf { it.endsWith("Activity") }?.let { lastActivity = it }
         }
         // 글자 하나 바뀔 때마다 이벤트가 수십 개 몰려온다. 잠깐 모았다가 한 번만 읽는다.
         if (scanPending) return
@@ -85,12 +88,18 @@ class ScreenTextService : AccessibilityService() {
             visited++
             val cls = n.className?.toString().orEmpty()
             val text = n.text?.toString() ?: n.contentDescription?.toString()
+            val vid = n.viewIdResourceName
             // 비밀번호 칸은 시스템이 가린 채로 주지만 그마저 남기지 않는다.
-            // 타자 치는 중인 입력창은 글자마다 바뀌어 잡음이 된다. 포커스가 떠난 뒤 한 번에 잡는다.
-            val skip = n.isPassword || (cls.endsWith("EditText") && n.isFocused)
+            // 재생 막대(SeekBar)는 1초마다 "3분 중 0분 41초"가 바뀌어 초당 한 줄이 된다. 내용이 아니라 상태다.
+            var skip = n.isPassword || cls.endsWith("SeekBar") || cls.endsWith("ProgressBar")
+            // 입력창은 글자마다 바뀌어 잡음이 된다. 직전 스캔과 같은 글일 때만(= 타자를 멈췄을 때) 남긴다.
+            // 클래스 이름은 믿지 않는다 — 카카오톡 입력창은 MultiAutoCompleteTextView 다.
+            if (!skip && n.isEditable && text != null) {
+                val prev = editing.put("$pkg|$vid", text)
+                if (prev != text) skip = true
+            }
             if (!text.isNullOrBlank() && n.isVisibleToUser && !skip) {
                 n.getBoundsInScreen(rect)
-                val vid = n.viewIdResourceName
                 val key = "$pkg|$title|$vid|$text|${rect.left},${rect.top},${rect.right},${rect.bottom}"
                 if (recent.put(key, now) == null) {
                     nodes.put(
@@ -123,6 +132,7 @@ class ScreenTextService : AccessibilityService() {
 
     /** 오래된 것부터 지운다. access-order 맵이라 앞쪽이 가장 오래 안 본 것이다. */
     private fun expire(now: Long) {
+        if (editing.size > 200) editing.clear()
         val it = recent.entries.iterator()
         while (it.hasNext()) {
             val e = it.next()
