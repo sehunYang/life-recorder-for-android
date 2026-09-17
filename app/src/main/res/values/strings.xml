@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">Life Recorder</string>
 
-    <!-- 설정 > 접근성에 보이는 설명. 다른 앱은 읽지 않는다는 것을 여기서 밝힌다. -->
-    <string name="a11y_description">카카오톡 화면에 보이는 글자를 하루치 파일로 모읍니다. 내가 보낸 메시지와 방 이름을 알림만으로는 얻을 수 없어서 씁니다. 카카오톡 외의 앱 화면은 읽지 않습니다.</string>
+    <!-- 설정 > 접근성에 보이는 설명. 모든 앱을 읽는다는 것을 여기서 밝힌다. -->
+    <string name="a11y_description">화면에 보이는 글자를 앱을 가리지 않고 하루치 파일로 모읍니다. 화면 녹화를 OCR로 다시 읽지 않아도 되게 하려는 것입니다. 비밀번호 입력란과 이 앱 자신의 화면은 남기지 않습니다. 파일은 본인의 Google Drive에만 올라갑니다.</string>
 
     <!-- 위젯 고르는 화면에 보이는 이름과 설명 -->
     <string name="widget_label">기록 시작·중지</string>

@@ -50,11 +50,11 @@ adb install -r "app\build\outputs\apk\debug\app-debug.apk"
 3. **기록 시작 (ON)** → 권한 요청이 순서대로 뜬다. 전부 허용
    - 마이크, 알림, 음악 및 오디오(통화 녹음 읽기), SMS, 연락처
 4. **화면 녹화 동의 팝업** → "전체 화면" 선택 후 시작
-5. 카카오톡 카드의 **접근성 설정 열기** → 설치된 앱 > Life Recorder 켜기 → 뒤로
+5. 함께 모으기 카드의 **접근성 설정 열기** → 설치된 앱 > Life Recorder 켜기 → 뒤로
 6. 함께 모으기 카드의 **사용 정보 접근 허용하기** → 목록에서 Life Recorder 켜기 → 뒤로
 
 상단 알림에 `녹음 중 · 화면 녹화 중`이 보이면 정상이다.
-카카오톡 카드에 "카카오톡 화면에 보이는 글자를 그대로 모으는 중", 앱 사용 기록 줄에 권한 문구가 사라지면 5·6번도 된 것이다.
+"화면 글자 읽기" 줄에 "모든 앱 화면에 보이는 글자를 그대로 모으는 중", 앱 사용 기록 줄에 권한 문구가 사라지면 5·6번도 된 것이다.
 
 ## 4단계. 안 죽게 만드는 폰 설정
 
@@ -192,27 +192,30 @@ adb exec-out run-as com.liferecorder cat /sdcard/Android/data/com.liferecorder/f
 
 접근성 서비스와 사용 정보 접근이 실제로 파일을 만드는지 본다. 3단계 5·6번이 먼저다.
 
-**화면 읽기**
+**화면 글자 읽기**
 
-1. 로그 창: `adb logcat -s KakaoA11y KakaoScreenLog`
+1. 로그 창: `adb logcat -s ScreenText ScreenTextLog`
 2. 카카오톡에서 **그룹채팅방 하나를 연다** → 몇 초 뒤 로그가 찍히는지
 3. **내가 메시지 한 건 보낸다** → 다시 찍히는지
-4. 방을 나갔다 다른 방을 연다
+4. 방을 나가 **브라우저나 메모 앱**을 연다 → 그 앱 줄도 생기는지 (`pkg`가 바뀐다)
 5. 파일 확인:
 ```powershell
-adb shell ls -l /sdcard/Android/data/com.liferecorder/files/kakaoscreen
-adb exec-out run-as com.liferecorder cat /sdcard/Android/data/com.liferecorder/files/kakaoscreen/rawkakaoscreen_<오늘>.jsonl.part
+adb shell ls -l /sdcard/Android/data/com.liferecorder/files/screentext
+adb exec-out run-as com.liferecorder cat /sdcard/Android/data/com.liferecorder/files/screentext/rawscreentext_<오늘>.jsonl.part
 ```
 
 | 볼 곳 | 기대 |
 |---|---|
+| `pkg` | 2·3번은 `com.kakao.talk`, 4번은 그 앱의 패키지명 |
 | `title` | 2번에서 연 방의 **이름** (알림에는 없던 것) |
-| `nodes[].text` | 3번에서 보낸 **내 메시지 본문** |
+| `nodes[].text` | 3번에서 보낸 **내 메시지 본문**. 입력창에 치는 동안은 안 나오고 보낸 뒤 말풍선으로 |
 | `nodes[].l`, `r` | 내 메시지는 `r`이 화면 폭 근처, 상대 메시지는 `l`이 0 근처 |
 | `activity` | 채팅방이면 `…ChatRoomActivity` |
-| 줄 수 | 화면이 바뀔 때마다 한 줄. 가만히 두면 늘지 않아야 한다 (30초 안에 본 글자는 다시 안 쓴다) |
+| 줄 수 | 화면이 바뀔 때마다 한 줄. 가만히 두면 늘지 않아야 한다 (같은 앱·창에서 2분 안에 본 글자는 다시 안 쓴다) |
+| 비밀번호 | 어느 앱이든 비밀번호 칸에 친 것은 **나오면 안 된다** |
 
-`vid` 값은 카카오톡 버전에 따라 다르다. 어떤 값이 말풍선인지는 이 파일을 보고 소비자 쪽에서 정한다.
+`vid` 값은 앱 버전에 따라 다르다. 어떤 값이 말풍선인지는 이 파일을 보고 소비자 쪽에서 정한다.
+하루 돌린 뒤 파일 크기를 본다 — 앱을 가리지 않으므로 스크롤이 많은 날은 수 MB가 될 수 있다.
 
 **앱 사용 기록**
 

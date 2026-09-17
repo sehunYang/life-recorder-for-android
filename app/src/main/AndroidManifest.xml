@@ -72,19 +72,19 @@
             </intent-filter>
         </service>
 
-        <!-- 카카오톡 화면의 글자 읽기. 설정 > 접근성에서 사용자가 직접 켜야 한다.
-             알림에 안 오는 내 발화·열어 둔 방의 메시지·그룹방 이름이 여기서 나온다. -->
+        <!-- 화면의 글자 읽기 (앱을 가리지 않는다). 설정 > 접근성에서 사용자가 직접 켜야 한다.
+             카카오톡이면 알림에 안 오는 내 발화·그룹방 이름이, 다른 앱이면 문서·게시글이 OCR 없이 온다. -->
         <service
-            android:name=".kakao.KakaoAccessibilityService"
+            android:name=".kakao.ScreenTextService"
             android:exported="true"
-            android:label="Life Recorder (카카오톡 화면 읽기)"
+            android:label="Life Recorder (화면 글자 읽기)"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/kakao_accessibility" />
+                android:resource="@xml/screen_text_accessibility" />
         </service>
 
         <!-- 카카오톡 대화 내용 내보내기 → 다른 앱으로 공유 → Life Recorder -->

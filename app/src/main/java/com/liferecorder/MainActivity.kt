@@ -22,9 +22,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.work.ExistingWorkPolicy
 import com.google.android.gms.common.api.ApiException
-import com.liferecorder.kakao.KakaoAccessibilityService
 import com.liferecorder.kakao.KakaoImport
 import com.liferecorder.kakao.KakaoNotificationListener
+import com.liferecorder.kakao.ScreenTextService
 import com.liferecorder.service.RecordingService
 import com.liferecorder.ui.LifeRecorderTheme
 import com.liferecorder.ui.MainScreen
@@ -48,8 +48,8 @@ class MainActivity : ComponentActivity() {
     private val appAccessOn = mutableStateOf(false)
     private val includeKakao = mutableStateOf(true)
     private val kakaoAccessOn = mutableStateOf(false)
-    private val includeKakaoScreen = mutableStateOf(true)
-    private val kakaoScreenOn = mutableStateOf(false)
+    private val includeScreenText = mutableStateOf(true)
+    private val screenTextOn = mutableStateOf(false)
     private val kakaoDump = mutableStateOf(false)
 
     private val kakaoFileLauncher =
@@ -179,7 +179,7 @@ class MainActivity : ComponentActivity() {
         includeSms.value = Prefs.isIncludeSms(this)
         includeApp.value = Prefs.isIncludeApp(this)
         includeKakao.value = Prefs.isIncludeKakao(this)
-        includeKakaoScreen.value = Prefs.isIncludeKakaoScreen(this)
+        includeScreenText.value = Prefs.isIncludeScreenText(this)
         kakaoDump.value = Prefs.isKakaoDump(this)
         setContent {
             val status by RecorderState.status.collectAsStateWithLifecycle()
@@ -193,10 +193,10 @@ class MainActivity : ComponentActivity() {
                     includeSms = includeSms.value,
                     includeApp = includeApp.value,
                     appAccessOn = appAccessOn.value,
+                    includeScreenText = includeScreenText.value,
+                    screenTextOn = screenTextOn.value,
                     includeKakao = includeKakao.value,
                     kakaoAccessOn = kakaoAccessOn.value,
-                    includeKakaoScreen = includeKakaoScreen.value,
-                    kakaoScreenOn = kakaoScreenOn.value,
                     kakaoDump = kakaoDump.value,
                     batteryExempt = batteryExempt.value,
                     actions = UiActions(
@@ -251,10 +251,10 @@ class MainActivity : ComponentActivity() {
                             if (v && !KakaoNotificationListener.isEnabled(this)) openNotificationAccess()
                         },
                         openNotificationAccess = ::openNotificationAccess,
-                        setIncludeKakaoScreen = { v ->
-                            Prefs.setIncludeKakaoScreen(this, v)
-                            includeKakaoScreen.value = v
-                            if (v && !KakaoAccessibilityService.isEnabled(this)) openAccessibilitySettings()
+                        setIncludeScreenText = { v ->
+                            Prefs.setIncludeScreenText(this, v)
+                            includeScreenText.value = v
+                            if (v && !ScreenTextService.isEnabled(this)) openAccessibilitySettings()
                         },
                         openAccessibilitySettings = ::openAccessibilitySettings,
                         setKakaoDump = { v ->
@@ -300,7 +300,7 @@ class MainActivity : ComponentActivity() {
         val pm = getSystemService(PowerManager::class.java)
         batteryExempt.value = pm.isIgnoringBatteryOptimizations(packageName)
         kakaoAccessOn.value = KakaoNotificationListener.isEnabled(this)
-        kakaoScreenOn.value = KakaoAccessibilityService.isEnabled(this)
+        screenTextOn.value = ScreenTextService.isEnabled(this)
         appAccessOn.value = AppUsageExporter.hasPermission(this)
         RecorderState.update { it.copy(recordingEnabled = Prefs.isRecordingEnabled(this)) }
         lifecycleScope.launch { withContext(Dispatchers.IO) { RecorderState.refreshPending(this@MainActivity) } }

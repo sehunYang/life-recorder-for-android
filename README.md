@@ -49,7 +49,7 @@ ON을 누르면 백그라운드에서 **주변 소리(마이크)** 와 **화면*
 | 카메라 | `DCIM/Camera`의 사진·동영상을 복사해 `LifeRecorder/camera`에 업로드. **원본은 절대 지우지 않음.** 사진첩이 크면 한 번에 다 올리지 않고 실행당 1GB씩, 최신 것부터 나눠 올린다 (`Config.CAMERA_BUDGET_BYTES`). 스크린샷은 제외. 기본 꺼짐 |
 | 카카오톡 | 알림에 뜬 내용을 그대로 하루치 JSONL(`kakao_yyyy-MM-dd.jsonl`)로 쌓아 `LifeRecorder/kakao`에 업로드. 해석하거나 합치지 않는다. "대화 내용 내보내기" 파일을 앱에 공유하면 그 파일도 원본 그대로 올린다 |
 | 문자 | 어제까지의 SMS/MMS를 하루 단위 JSONL(`sms_yyyy-MM-dd.jsonl`)로 그대로 내보내 `LifeRecorder/sms`에 업로드. 시각순 한 줄에 하나. 처음 켜면 30일치를 소급. RCS 채팅은 제외(시스템이 제3자 앱에 열어주지 않음) |
-| 카카오톡 화면 | 접근성 서비스가 **카카오톡 화면에 보이는 글자**를 뷰 계층에서 그대로 읽어 하루치 JSONL(`kakaoscreen_yyyy-MM-dd.jsonl`)로 `LifeRecorder/kakao-screen`에 업로드. 알림에 없는 내 발화·열어 둔 방의 메시지·그룹방 이름이 여기서 나온다. 카카오톡 외의 앱은 읽지 않는다. 설정 > 접근성에서 직접 켜야 한다 |
+| 화면 글자 | 접근성 서비스가 **앞에 떠 있는 앱의 화면에 보이는 글자**를 뷰 계층에서 그대로 읽어 하루치 JSONL(`screentext_yyyy-MM-dd.jsonl`)로 `LifeRecorder/screen-text`에 업로드. 앱을 가리지 않는다 — 카카오톡이면 알림에 없는 내 발화·그룹방 이름이, 다른 앱이면 문서·게시글이 OCR 없이 온다. 비밀번호 입력란과 이 앱 자신만 뺀다. 설정 > 접근성에서 직접 켜야 한다 |
 | 앱 사용 | 어느 앱이 앞에 떠 있었는지, 화면이 켜지고 잠긴 시각을 시스템 UsageEvents에서 읽어 하루치 JSONL(`app_yyyy-MM-dd.jsonl`)로 `LifeRecorder/app`에 업로드. 앱이 죽어 있던 동안 것도 시스템이 들고 있어 되살아난다(며칠치). 설정 > 사용 정보 접근에서 허용해야 한다 |
 
 파일 이름: `audio_2026-09-03_14-00-00.m4a`, `screen_2026-09-03_14-00-00.mp4` (세그먼트 시작 시각).
@@ -75,7 +75,7 @@ ON을 누르면 백그라운드에서 **주변 소리(마이크)** 와 **화면*
 | 통화 녹음 수집 | 폰이 통화 녹음 파일을 공용 저장소에 남길 것 (삼성 기본 전화, T전화 등). 경로는 `Config.CALL_RECORDING_PATHS`에서 바꾼다 |
 | 카카오톡 수집 | 카카오톡(`com.kakao.talk`) 설치. 다른 메신저를 쓰려면 `Config.KAKAO_PACKAGE`를 바꾸면 되지만 알림 구조가 앱마다 달라 파싱은 손봐야 한다 |
 | 문자 수집 | SMS/MMS. RCS(채팅)는 시스템이 열어주지 않아 불가능 |
-| 카카오톡 화면 읽기 | 카카오톡 설치 + 설정 > 접근성에서 Life Recorder 켜기. 카카오톡 버전이 바뀌면 뷰 id가 달라질 수 있다 (내용은 그대로 잡힌다) |
+| 화면 글자 읽기 | 설정 > 접근성에서 Life Recorder 켜기. 앱 버전이 바뀌면 뷰 id가 달라질 수 있다 (글자 자체는 그대로 잡힌다) |
 | 앱 사용 기록 | 설정 > 사용 정보 접근에서 Life Recorder 허용. 앱 이름을 붙이기 위해 `QUERY_ALL_PACKAGES`를 쓰므로 스토어 배포와는 맞지 않는다 |
 
 마이크 녹음·화면 녹화·Drive 업로드는 **어느 안드로이드 14+ 기기에서든** 그대로 쓸 수 있다.
@@ -240,14 +240,14 @@ adb shell appops set com.liferecorder PROJECT_MEDIA allow
 
 알림은 상대 발화만 준다. 내 발화, 방을 열어 둔 동안 받은 메시지, 그룹방 이름은 **화면에는 있다.**
 접근성 서비스는 화면의 뷰 계층을 글자로 주므로, OCR 없이 원문 그대로 남는다.
+카카오톡만이 아니라 **앞에 떠 있는 모든 앱**을 읽는다 (함께 모으기 카드의 "화면 글자 읽기").
 
-- 앱의 카카오톡 카드에서 **접근성 설정 열기** → 설치된 앱 > Life Recorder 켜기
-- 카카오톡(`com.kakao.talk`) 화면만 읽는다. 다른 앱은 서비스 설정(`res/xml/kakao_accessibility.xml`)에서 처음부터 받지 않는다
-- 카카오톡이 앞에 떠 있을 때만 읽는다. 뒤에 있으면 아무것도 안 생긴다. 알림 로그와 서로 보완한다
+- **접근성 설정 열기** → 설치된 앱 > Life Recorder 켜기
+- 앞에 떠 있는 앱만 읽는다. 카카오톡이 뒤에 있으면 카카오톡 줄은 안 생긴다. 알림 로그와 서로 보완한다
 - 화면이 바뀔 때마다 **새로 나타난 글자만** 한 줄로 남긴다. 각 글자에 화면 좌표가 붙어 있어 말풍선이 왼쪽(상대)인지 오른쪽(나)인지 내려받은 뒤 가릴 수 있다
 - 채팅방 창 제목이 곧 방 이름이다. 알림에 없던 그룹방 이름이 여기서 나온다
-- 입력창에 타자 치는 중간 상태는 남기지 않는다. 보낸 뒤 말풍선으로 잡힌다
-- 파일: `kakaoscreen_yyyy-MM-dd.jsonl` → `LifeRecorder/kakao-screen`. 형식은 `DESIGN.md` 3.10
+- 타자 치는 중인 입력창은 남기지 않고, 포커스가 떠난 뒤 잡는다. 비밀번호 입력란은 어느 앱이든 남기지 않는다
+- 파일: `screentext_yyyy-MM-dd.jsonl` → `LifeRecorder/screen-text`. 형식은 `DESIGN.md` 3.10
 
 **대화 내보내기 파일** — 카카오톡에서 채팅방 > 메뉴 > 대화 내용 > 내보내기 후 Life Recorder로 공유하면
 그 파일을 변환 없이 `kakao_<시각>_export_<원본이름>` 으로 올린다.
@@ -275,7 +275,7 @@ adb shell appops set com.liferecorder PROJECT_MEDIA allow
 | [`TESTING.md`](TESTING.md) | 폰에 설치하고 검증하는 단계별 절차 |
 | [`DESIGN.md`](DESIGN.md) | 산출 데이터의 형식·한계·불변식. 이 데이터를 소비하는 쪽이 읽을 문서 |
 
-주요 소스: `kakao/KakaoNotificationListener.kt`(알림 파싱), `kakao/KakaoAccessibilityService.kt`(화면 글자),
+주요 소스: `kakao/KakaoNotificationListener.kt`(알림 파싱), `kakao/ScreenTextService.kt`(화면 글자),
 `service/RecordingService.kt`(녹음·녹화 수명주기), `Storage.kt`(파일 규약), `upload/UploadWorker.kt`(업로드),
 `upload/AppUsageExporter.kt`(앱 사용), `Config.kt`(품질·경로 상수).
 

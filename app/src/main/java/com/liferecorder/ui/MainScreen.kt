@@ -67,7 +67,7 @@ data class UiActions(
     val openUsageAccess: () -> Unit,
     val setIncludeKakao: (Boolean) -> Unit,
     val openNotificationAccess: () -> Unit,
-    val setIncludeKakaoScreen: (Boolean) -> Unit,
+    val setIncludeScreenText: (Boolean) -> Unit,
     val openAccessibilitySettings: () -> Unit,
     val setKakaoDump: (Boolean) -> Unit,
     val importKakaoExport: () -> Unit,
@@ -85,10 +85,10 @@ fun MainScreen(
     includeSms: Boolean,
     includeApp: Boolean,
     appAccessOn: Boolean,
+    includeScreenText: Boolean,
+    screenTextOn: Boolean,
     includeKakao: Boolean,
     kakaoAccessOn: Boolean,
-    includeKakaoScreen: Boolean,
-    kakaoScreenOn: Boolean,
     kakaoDump: Boolean,
     batteryExempt: Boolean,
     actions: UiActions,
@@ -105,8 +105,8 @@ fun MainScreen(
             Header(status)
             Hero(status, actions)
             UploadCard(status, wifiOnly, chargingOnly, actions)
-            CollectCard(status, includeCalls, includeCamera, includeSms, includeApp, appAccessOn, actions)
-            KakaoCard(status, includeKakao, kakaoAccessOn, includeKakaoScreen, kakaoScreenOn, kakaoDump, actions)
+            CollectCard(status, includeCalls, includeCamera, includeSms, includeApp, appAccessOn, includeScreenText, screenTextOn, actions)
+            KakaoCard(status, includeKakao, kakaoAccessOn, kakaoDump, actions)
             KeepAliveCard(batteryExempt, actions)
             Spacer(Modifier.height(12.dp))
         }
@@ -293,6 +293,8 @@ private fun CollectCard(
     includeSms: Boolean,
     includeApp: Boolean,
     appAccessOn: Boolean,
+    includeScreenText: Boolean,
+    screenTextOn: Boolean,
     actions: UiActions,
 ) {
     SectionCard(icon = painterResource(R.drawable.ic_folder), title = "함께 모으기") {
@@ -328,19 +330,25 @@ private fun CollectCard(
         AnimatedVisibility(includeApp && !appAccessOn) {
             FilledTonalButton(onClick = actions.openUsageAccess, Modifier.fillMaxWidth()) { Text("사용 정보 접근 허용하기") }
         }
+        ToggleRow(
+            "화면 글자 읽기 (접근성)",
+            includeScreenText,
+            actions.setIncludeScreenText,
+            subtitle = when {
+                !includeScreenText -> "꺼짐"
+                screenTextOn -> "모든 앱 화면에 보이는 글자를 그대로 모으는 중"
+                else -> "설정 > 접근성 > 설치된 앱에서 Life Recorder를 켜야 합니다"
+            },
+        )
+        AnimatedVisibility(includeScreenText && !screenTextOn) {
+            FilledTonalButton(onClick = actions.openAccessibilitySettings, Modifier.fillMaxWidth()) { Text("접근성 설정 열기") }
+        }
+        Hint("화면 녹화를 OCR로 다시 읽지 않아도 되게, 뷰에 있는 글자를 원문 그대로 남깁니다. 카카오톡은 내 발화와 방 이름까지 옵니다. 비밀번호 칸은 남기지 않습니다.")
     }
 }
 
 @Composable
-private fun KakaoCard(
-    status: Status,
-    includeKakao: Boolean,
-    kakaoAccessOn: Boolean,
-    includeKakaoScreen: Boolean,
-    kakaoScreenOn: Boolean,
-    kakaoDump: Boolean,
-    actions: UiActions,
-) {
+private fun KakaoCard(status: Status, includeKakao: Boolean, kakaoAccessOn: Boolean, kakaoDump: Boolean, actions: UiActions) {
     SectionCard(
         icon = painterResource(R.drawable.ic_chat),
         title = "카카오톡",
@@ -361,29 +369,14 @@ private fun KakaoCard(
         }
         Hint(
             "내가 보낸 메시지와 채팅방을 열어둔 동안 받은 메시지는 알림이 없어 빠집니다. " +
-                "전체 대화가 필요하면 카카오톡에서 채팅방 > 메뉴 > 대화 내용 > 내보내기 후 Life Recorder로 공유하세요."
+                "위의 '화면 글자 읽기'를 켜면 화면에 보이는 동안은 그것도 남고, " +
+                "전체 대화가 필요하면 채팅방 > 메뉴 > 대화 내용 > 내보내기 후 Life Recorder로 공유하세요."
         )
         Hint("텍스트만 내보냈으면 파일을, 미디어까지 저장했으면 그 폴더를 고르세요. 폴더는 안의 사진까지 통째로 가져옵니다.")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = actions.importKakaoExport, Modifier.weight(1f)) { Text("파일 고르기") }
             OutlinedButton(onClick = actions.importKakaoFolder, Modifier.weight(1f)) { Text("폴더 고르기") }
         }
-
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        ToggleRow(
-            "화면에서 대화 읽기 (접근성)",
-            includeKakaoScreen,
-            actions.setIncludeKakaoScreen,
-            subtitle = when {
-                !includeKakaoScreen -> "꺼짐"
-                kakaoScreenOn -> "카카오톡 화면에 보이는 글자를 그대로 모으는 중"
-                else -> "설정 > 접근성에서 Life Recorder를 켜야 합니다"
-            },
-        )
-        AnimatedVisibility(includeKakaoScreen && !kakaoScreenOn) {
-            FilledTonalButton(onClick = actions.openAccessibilitySettings, Modifier.fillMaxWidth()) { Text("접근성 설정 열기") }
-        }
-        Hint("알림에 없는 내 발화·열어 둔 방의 메시지·그룹방 이름이 여기서 나옵니다. 카카오톡 외의 앱은 읽지 않습니다.")
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ToggleRow(

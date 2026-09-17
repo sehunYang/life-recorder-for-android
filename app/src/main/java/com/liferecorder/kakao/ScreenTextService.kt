@@ -10,45 +10,48 @@ import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import com.liferecorder.Config
 import com.liferecorder.Prefs
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 카카오톡 화면에 보이는 글자를 그대로 남긴다. 해석하지 않는다.
+ * 화면에 보이는 글자를 앱을 가리지 않고 그대로 남긴다. 해석하지 않는다.
  *
- * 알림에는 내가 보낸 메시지, 방을 열어 둔 동안 받은 메시지, 그룹방 이름이 없다.
- * 이 셋은 전부 화면에는 있다. 접근성 서비스는 화면의 뷰 계층을 글자로 주므로 OCR이 아니라 원문이다.
- * 말풍선이 내 것인지 상대 것인지는 노드의 좌표(l·r)에 남아 있으니 내려받은 뒤에 판단한다.
+ * 화면 녹화(mp4)에서 글자를 다시 읽으려면 OCR이 필요하다. 접근성 서비스는 화면의 뷰 계층을
+ * 글자로 주므로 OCR 없이 원문이 남는다. 카카오톡이면 알림에 없는 내 발화·열어 둔 방의 메시지·
+ * 그룹방 이름이, 다른 앱이면 문서·게시글·거래 내역이 그대로 온다.
  *
- * 카카오톡 패키지의 이벤트만 받는다(res/xml/kakao_accessibility.xml). 다른 앱 화면은 읽지 않는다.
+ * 무엇을 버릴지는 여기서 정하지 않는다. 내려받은 쪽이 정한다. 예외는 둘뿐이다 —
+ * 비밀번호 입력란(시스템이 가리는 것)과 이 앱 자신의 화면.
+ *
  * 설정 > 접근성에서 사용자가 직접 켜야 한다.
  */
-class KakaoAccessibilityService : AccessibilityService() {
+class ScreenTextService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var scanPending = false
-    /** 최근에 본 노드(방·글·위치 → 본 시각). 화면이 바뀔 때마다 전체를 다시 쓰지 않고 새로 나타난 것만 남긴다. */
-    private val recent = LinkedHashMap<String, Long>(64, 0.75f, true)
+    /** 최근에 본 노드(앱·창·글·위치 → 본 시각). 화면이 바뀔 때마다 전체를 다시 쓰지 않고 새로 나타난 것만 남긴다. */
+    private val recent = LinkedHashMap<String, Long>(256, 0.75f, true)
     private var lastActivity: String? = null
+    private var lastPkg: String? = null
     private var lastTitle: String? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        KakaoScreenLog.writeServiceEvent(this, "connected")
+        ScreenTextLog.writeServiceEvent(this, "connected")
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        KakaoScreenLog.writeServiceEvent(this, "disconnected")
+        ScreenTextLog.writeServiceEvent(this, "disconnected")
         return super.onUnbind(intent)
     }
 
     override fun onInterrupt() {}
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.packageName?.toString() != Config.KAKAO_PACKAGE) return
-        if (!Prefs.isIncludeKakaoScreen(this)) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == packageName) return
+        if (!Prefs.isIncludeScreenText(this)) return
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             lastActivity = event.className?.toString()
         }
@@ -68,7 +71,8 @@ class KakaoAccessibilityService : AccessibilityService() {
 
     private fun scan() {
         val root = rootInActiveWindow ?: return
-        if (root.packageName?.toString() != Config.KAKAO_PACKAGE) return
+        val pkg = root.packageName?.toString() ?: return
+        if (pkg == packageName) return
         val title = root.window?.title?.toString()
         val now = System.currentTimeMillis()
         expire(now)
@@ -81,15 +85,17 @@ class KakaoAccessibilityService : AccessibilityService() {
             visited++
             val cls = n.className?.toString().orEmpty()
             val text = n.text?.toString() ?: n.contentDescription?.toString()
-            // 입력창은 타자 치는 중간 상태가 계속 바뀌어 잡음만 된다. 보낸 뒤 말풍선으로 다시 잡힌다.
-            if (!text.isNullOrBlank() && n.isVisibleToUser && !cls.endsWith("EditText")) {
+            // 비밀번호 칸은 시스템이 가린 채로 주지만 그마저 남기지 않는다.
+            // 타자 치는 중인 입력창은 글자마다 바뀌어 잡음이 된다. 포커스가 떠난 뒤 한 번에 잡는다.
+            val skip = n.isPassword || (cls.endsWith("EditText") && n.isFocused)
+            if (!text.isNullOrBlank() && n.isVisibleToUser && !skip) {
                 n.getBoundsInScreen(rect)
                 val vid = n.viewIdResourceName
-                val key = "$title|$vid|$text|${rect.left},${rect.top},${rect.right},${rect.bottom}"
+                val key = "$pkg|$title|$vid|$text|${rect.left},${rect.top},${rect.right},${rect.bottom}"
                 if (recent.put(key, now) == null) {
                     nodes.put(
                         JSONObject()
-                            .put("vid", vid?.removePrefix("${Config.KAKAO_PACKAGE}:id/") ?: JSONObject.NULL)
+                            .put("vid", vid?.substringAfter(":id/") ?: JSONObject.NULL)
                             .put("cls", cls.substringAfterLast('.'))
                             .put("text", text)
                             .put("l", rect.left).put("t", rect.top).put("r", rect.right).put("b", rect.bottom)
@@ -100,13 +106,15 @@ class KakaoAccessibilityService : AccessibilityService() {
         }
         walk(root, 0)
 
-        if (nodes.length() == 0 && title == lastTitle) return
+        if (nodes.length() == 0 && pkg == lastPkg && title == lastTitle) return
+        lastPkg = pkg
         lastTitle = title
-        KakaoScreenLog.write(
+        ScreenTextLog.write(
             this, now,
             JSONObject()
                 .put("kind", "screen")
                 .put("t", now)
+                .put("pkg", pkg)
                 .put("activity", lastActivity ?: JSONObject.NULL)
                 .put("title", title ?: JSONObject.NULL)
                 .put("nodes", nodes),
@@ -117,21 +125,23 @@ class KakaoAccessibilityService : AccessibilityService() {
     private fun expire(now: Long) {
         val it = recent.entries.iterator()
         while (it.hasNext()) {
-            if (now - it.next().value > RECENT_TTL_MS) it.remove() else break
+            val e = it.next()
+            if (now - e.value > RECENT_TTL_MS || recent.size > MAX_RECENT) it.remove() else break
         }
     }
 
     companion object {
-        private const val TAG = "KakaoA11y"
+        private const val TAG = "ScreenText"
         private const val SCAN_DELAY_MS = 700L
-        private const val RECENT_TTL_MS = 30_000L
+        private const val RECENT_TTL_MS = 120_000L
+        private const val MAX_RECENT = 4000
         private const val MAX_NODES = 600
         private const val MAX_DEPTH = 40
 
         /** 사용자가 설정 > 접근성에서 이 서비스를 켰는지. */
         fun isEnabled(ctx: Context): Boolean {
             val flat = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            return flat != null && flat.contains(ctx.packageName) && flat.contains(KakaoAccessibilityService::class.java.simpleName)
+            return flat != null && flat.contains(ctx.packageName) && flat.contains(ScreenTextService::class.java.simpleName)
         }
     }
 }

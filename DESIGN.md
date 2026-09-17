@@ -35,7 +35,7 @@
 | 카메라 사진·동영상 | `DCIM/Camera`를 복사 | 이벤트, 사후 수집 | 촬영 후 최소 1분, 소급분은 며칠 |
 | 문자(SMS/MMS) | ContentProvider | 이벤트, 하루 단위 내보내기 | **다음 날** |
 | 카카오톡 알림 | 알림 가로채기 | 이벤트, 실시간만 | **다음 날** (파일 확정 기준) |
-| 카카오톡 화면 | 접근성 서비스 | 이벤트, 화면이 바뀔 때만 | **다음 날** (3.10) |
+| 화면 글자 (모든 앱) | 접근성 서비스 | 이벤트, 화면이 바뀔 때만 | **다음 날** (3.10) |
 | 앱 사용 | 시스템 UsageEvents | 이벤트, 하루 단위 내보내기 | **다음 날** (3.9) |
 
 업로드는 기본적으로 **Wi-Fi + 충전 중**에만 돈다.
@@ -63,7 +63,7 @@ LifeRecorder/
   index/        index_2026-09-06.jsonl                                ← 수집 기록. 3.8 참고
                 pcindex_2026-09-06_home.jsonl                         ← PC가 남긴 수집 기록
   app/          app_2026-09-06.jsonl                                  ← 어느 앱이 앞에 있었나. 3.9 참고
-  kakao-screen/ kakaoscreen_2026-09-06.jsonl                          ← 접근성이 읽은 카카오톡 화면 글자. 3.10 참고
+  screen-text/  screentext_2026-09-06.jsonl                           ← 접근성이 읽은 화면 글자 (모든 앱). 3.10 참고
 ```
 
 > 로컬 폴더명은 `kakaomedia`, **Drive 폴더명은 `kakao-media`** 로 다르다. Drive 쪽 이름을 쓴다.
@@ -90,7 +90,7 @@ LifeRecorder/
 | `kakao-media/` | `^kakaoimg_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<user>\d+)_(?<room>[A-Za-z0-9_-]+)_(?<hash>[A-Za-z0-9_-]+)\.(jpg\|png\|gif\|webp\|bin)$` | 메시지 **발화** 시각 |
 | `kakao-media/` | `^kakaoexp_(?<t>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_(?<orig>.+)$` | 사용자가 **가져온 시각** (3.7) |
 | `app/` | `^app_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
-| `kakao-screen/` | `^kakaoscreen_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
+| `screen-text/` | `^screentext_(?<d>\d{4}-\d{2}-\d{2})\.jsonl$` | 그 **날짜 하루치** |
 
 **`kakao/` 폴더를 훑을 때 주의.** 세 종류가 한 폴더에 섞여 있고 셋 다 `kakao_`로 시작한다.
 `kakao_dump_`를 먼저 걸러내고, 그다음 `_export_` 포함 여부를 보고, 남은 것이 일별 로그다.
@@ -321,7 +321,7 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 | `kind` | string | `"upload"` (한 건 올릴 때마다) \| `"snapshot"` (재고 목록, 아래) |
 | `t` | int (epoch ms) | **업로드가 끝난 시각.** 내용이 만들어진 시각이 아니다 |
 | `name` | string | 파일 이름. 내용 시각은 여기에 들어 있다 (2.1) |
-| `folder` | string | `audio` \| `screen` \| `call` \| `camera` \| `sms` \| `kakao` \| `kakaomedia` \| `app` \| `kakaoscreen` |
+| `folder` | string | `audio` \| `screen` \| `call` \| `camera` \| `sms` \| `kakao` \| `kakaomedia` \| `app` \| `screentext` |
 | `bytes` | int | 크기 |
 | `driveId` | string | Drive 파일 ID. 파일이 살아 있는 동안 바로 찾을 수 있다 |
 | `md5` | string \| null | Drive가 돌려준 체크섬. 같은 내용인지 대조할 때 |
@@ -378,17 +378,22 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 - 시스템이 남긴 것을 읽으므로 **이 앱이 죽어 있던 동안의 사건도 있다.** 다만 시스템은 며칠치만 들고 있어, 처음 켤 때 최대 7일까지만 거슬러 온다
 - 이 앱 자신(`com.liferecorder`)도 나온다. 걸러서 쓸 것
 
-### 3.10 카카오톡 화면 `kakaoscreen_<날짜>.jsonl`
+### 3.10 화면 글자 `screentext_<날짜>.jsonl`
 
-접근성 서비스가 **카카오톡 화면에 보이는 글자**를 뷰 계층에서 그대로 읽은 것이다. OCR이 아니라 원문이다.
-알림에 없는 셋 — **내가 보낸 메시지, 방을 열어 둔 동안 받은 메시지, 그룹방 이름** — 이 여기에 있다.
-사용자가 설정 > 접근성에서 켰을 때만 생긴다.
+접근성 서비스가 **앞에 떠 있는 앱의 화면에 보이는 글자**를 뷰 계층에서 그대로 읽은 것이다. OCR이 아니라 원문이다.
+**앱을 가리지 않는다.** 카카오톡이면 알림에 없는 셋 — 내가 보낸 메시지, 방을 열어 둔 동안 받은 메시지, 그룹방 이름 — 이,
+브라우저·메모·은행 앱이면 그 화면의 글자가 그대로 온다. 사용자가 설정 > 접근성에서 켰을 때만 생긴다.
+
+앱이 빼는 것은 둘뿐이다. **비밀번호 입력란**(`isPassword`)과 **이 앱 자신의 화면.**
+그 밖에 무엇을 버릴지는 여기서 정하지 않는다. 소비자가 정한다.
 
 ```json
-{"kind":"screen","t":1788500640000,"activity":"com.kakao.talk.activity.chatroom.ChatRoomActivity",
- "title":"감자의 서울나들이 5",
+{"kind":"screen","t":1788500640000,"pkg":"com.kakao.talk",
+ "activity":"com.kakao.talk.activity.chatroom.ChatRoomActivity","title":"감자의 서울나들이 5",
  "nodes":[{"vid":"message","cls":"TextView","text":"점심 먹었어?","l":48,"t":1210,"r":520,"b":1290},
           {"vid":"message","cls":"TextView","text":"응 먹었지","l":560,"t":1320,"r":1032,"b":1400}]}
+{"kind":"screen","t":1788500700000,"pkg":"com.android.chrome","activity":"org.chromium.chrome.browser.ChromeTabbedActivity",
+ "title":"Chrome","nodes":[{"vid":"url_bar","cls":"EditText","text":"namu.wiki/w/운동량","l":120,"t":180,"r":960,"b":250}, ...]}
 {"kind":"service","event":"connected","t":1788500000000}
 ```
 
@@ -396,18 +401,20 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 |---|---|---|
 | `kind` | string | `"screen"` (한 번 읽은 결과) \| `"service"` (붙거나 끊긴 시점. 3.4와 같은 뜻) |
 | `t` | int (epoch ms) | 읽은 시각. **메시지가 보내진 시각이 아니다** |
-| `activity` | string \| null | 그때 앞에 있던 카카오톡 액티비티. 채팅방은 `ChatRoomActivity` |
-| `title` | string \| null | 창 제목. **채팅방이면 방 이름이다.** 알림에 없던 그룹방 이름이 여기서 나온다 |
-| `nodes[]` | object[] | 이번에 **새로 나타난** 글자 노드만. 이미 30초 안에 본 것은 다시 넣지 않는다 |
-| `nodes[].vid` | string \| null | 뷰 id (`com.kakao.talk:id/` 뗀 것). 카카오톡 버전에 따라 바뀐다 |
+| `pkg` | string | 앞에 있던 앱의 패키지명. `app_`(3.9)의 `pkg`와 같은 값이라 서로 잇는다 |
+| `activity` | string \| null | 그때 앞에 있던 액티비티. 카카오톡 채팅방은 `ChatRoomActivity` |
+| `title` | string \| null | 창 제목. **카카오톡 채팅방이면 방 이름이다.** 알림에 없던 그룹방 이름이 여기서 나온다. 앱에 따라 없거나 앱 이름뿐 |
+| `nodes[]` | object[] | 이번에 **새로 나타난** 글자 노드만. 같은 앱·창에서 2분 안에 본 것은 다시 넣지 않는다 |
+| `nodes[].vid` | string \| null | 뷰 id (`<패키지>:id/` 뗀 것). 앱 버전에 따라 바뀐다 |
 | `nodes[].cls` | string | 뷰 클래스 짧은 이름 |
 | `nodes[].text` | string | 보이는 글자 그대로 |
-| `nodes[].l t r b` | int | 화면 좌표(px). **`l`이 작으면 왼쪽(상대), `r`이 화면 폭에 가까우면 오른쪽(나)** |
+| `nodes[].l t r b` | int | 화면 좌표(px). 카카오톡이면 **`l`이 작으면 왼쪽(상대), `r`이 화면 폭에 가까우면 오른쪽(나)** |
 
-- **해석은 소비자 몫이다.** 말풍선인지 시각 표시("오후 3:12")인지 날짜 구분선인지는 `vid`·좌표·내용으로 가른다. 앱은 고르지 않는다
-- 같은 방을 스크롤해 올리면 **옛 메시지가 다시 나타난다.** 알림 로그와 본문·순서로 대조해 걸러야 한다
-- 입력창(`EditText`)은 뺐다. 타자 치는 중간 상태가 계속 바뀌어 잡음만 되기 때문이다. 보낸 뒤 말풍선으로 잡힌다
-- 접근성 서비스는 카카오톡이 **앞에 떠 있을 때만** 읽는다. 뒤에 있으면 아무것도 안 생긴다. 알림 로그(3.2)와 상보적이다
+- **해석은 소비자 몫이다.** 말풍선인지 시각 표시("오후 3:12")인지 메뉴 글자인지는 `pkg`·`vid`·좌표·내용으로 가른다. 앱은 고르지 않는다
+- 스크롤하면 **옛 내용이 다시 나타난다.** 카카오톡은 알림 로그와 본문·순서로 대조해 걸러야 한다
+- **타자 치는 중인 입력창은 빼고**(포커스가 있는 `EditText`), 포커스가 떠난 뒤 한 번에 잡는다. 글자마다 바뀌는 중간 상태를 남기지 않기 위해서다
+- 앞에 떠 있는 앱만 읽는다. 잠금화면·홈 화면의 글자도 온다 (홈 화면은 앱 이름 목록이다 — 잡음이니 `pkg`가 런처면 거른다)
+- **은행·결제 앱의 거래 내역도 온다.** 로컬에만 두는 것을 전제로 모으는 것이다. 외부로 보내기 전에 반드시 가려야 한다
 - `service` 레코드의 `disconnected` → `connected` 사이는 관측 불가 구간이다
 
 ---
@@ -496,7 +503,7 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 **"사용자가 무엇을 말했는가"를 묻는 질문에 이 데이터로 답하면 안 된다.**
 
 보완 경로는 세 가지다.
-- **화면 글자**(3.10). 접근성 서비스를 켜 두면 카카오톡을 보는 동안의 화면이 원문으로 남는다. 내 발화도 그대로. 2026-09-17 추가
+- **화면 글자**(3.10). 접근성 서비스를 켜 두면 카카오톡을 보는 동안의 화면이 원문으로 남는다. 내 발화도 그대로. 2026-09-17 추가 (`pkg`가 `com.kakao.talk`인 줄)
 - **수동 내보내기 파일**(3.7). 내 발화가 들어 있지만 시점이 띄엄띄엄하다
 - **마이크 오디오**. 대면 대화라면 내 목소리가 녹음돼 있다. 카카오톡 대화에는 해당 없음
 
@@ -728,7 +735,7 @@ Drive는 같은 폴더에 동명 파일을 허용한다. 앱은 업로드 전에
 
 - 앱 동작 개요와 설정: `README.md`
 - 설치·검증 절차: `TESTING.md`
-- 주요 소스: `kakao/KakaoNotificationListener.kt`(알림 파싱), `kakao/KakaoAccessibilityService.kt`(화면 글자),
+- 주요 소스: `kakao/KakaoNotificationListener.kt`(알림 파싱), `kakao/ScreenTextService.kt`(화면 글자),
   `kakao/KakaoMedia.kt`(사진), `service/RecordingService.kt`(녹음·녹화 수명주기), `Storage.kt`(파일 이름 규약),
   `upload/UploadWorker.kt`(업로드), `upload/SmsExporter.kt`(문자), `upload/AppUsageExporter.kt`(앱 사용),
   `Config.kt`(품질·폴더 상수)

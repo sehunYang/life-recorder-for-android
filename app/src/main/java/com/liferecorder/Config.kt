@@ -36,7 +36,7 @@ object Config {
     const val DRIVE_CAMERA_FOLDER = "camera"
     const val DRIVE_INDEX_FOLDER = "index"
     const val DRIVE_APP_FOLDER = "app"
-    const val DRIVE_KAKAO_SCREEN_FOLDER = "kakao-screen"
+    const val DRIVE_SCREEN_TEXT_FOLDER = "screen-text"
 
     /** 앱 사용 기록을 처음 켤 때 며칠 전까지 거슬러 올라갈지. 시스템이 UsageEvents를 들고 있는 기간 안에서. */
     const val APP_USAGE_BACKFILL_DAYS = 7

@@ -11,7 +11,7 @@ import com.liferecorder.RecorderState
 import com.liferecorder.Storage
 import com.liferecorder.kakao.KakaoLog
 import com.liferecorder.kakao.KakaoNotificationListener
-import com.liferecorder.kakao.KakaoScreenLog
+import com.liferecorder.kakao.ScreenTextLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -65,7 +65,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
                 RecorderState.update { it.copy(lastUploadError = "수집 기록 복원 대기 중 (가져오기 건너뜀)") }
             }
             finalizeKakao(ctx)
-            finalizeKakaoScreen(ctx)
+            finalizeScreenText(ctx)
             finalizeIndex(ctx)
             RecorderState.refreshPending(ctx)
 
@@ -175,12 +175,12 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         }
     }
 
-    /** 날이 지난 카카오톡 화면 글자 로그를 업로드 대상으로 확정한다. */
-    private fun finalizeKakaoScreen(ctx: Context) {
+    /** 날이 지난 화면 글자 로그를 업로드 대상으로 확정한다. */
+    private fun finalizeScreenText(ctx: Context) {
         try {
-            KakaoScreenLog.finalizeCompletedDays(ctx)
+            ScreenTextLog.finalizeCompletedDays(ctx)
         } catch (e: Exception) {
-            Log.w(TAG, "kakao screen finalize failed", e)
+            Log.w(TAG, "screen text finalize failed", e)
         }
     }
 
@@ -233,12 +233,12 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             ?: client.ensureFolder(Config.DRIVE_INDEX_FOLDER, root).also { Prefs.setFolderId(ctx, "index", it) }
         val app = Prefs.folderId(ctx, "app")
             ?: client.ensureFolder(Config.DRIVE_APP_FOLDER, root).also { Prefs.setFolderId(ctx, "app", it) }
-        val kakaoScreen = Prefs.folderId(ctx, "kakaoscreen")
-            ?: client.ensureFolder(Config.DRIVE_KAKAO_SCREEN_FOLDER, root).also { Prefs.setFolderId(ctx, "kakaoscreen", it) }
+        val screenText = Prefs.folderId(ctx, "screentext")
+            ?: client.ensureFolder(Config.DRIVE_SCREEN_TEXT_FOLDER, root).also { Prefs.setFolderId(ctx, "screentext", it) }
         return mapOf(
             "audio" to audio, "screen" to screen, "call" to call,
             "sms" to sms, "kakao" to kakao, "kakaomedia" to kakaoMedia,
-            "camera" to camera, "index" to index, "app" to app, "kakaoscreen" to kakaoScreen,
+            "camera" to camera, "index" to index, "app" to app, "screentext" to screenText,
         )
     }
 

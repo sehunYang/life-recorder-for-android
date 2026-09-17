@@ -10,26 +10,26 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 접근성 서비스가 카카오톡 화면에서 읽은 글자를 하루 단위 JSONL로 그대로 쌓는다.
+ * 접근성 서비스가 화면에서 읽은 글자를 하루 단위 JSONL로 그대로 쌓는다.
  *
- *   kakaoscreen/rawkakaoscreen_yyyy-MM-dd.jsonl.part   ← 오늘치, 계속 이어 쓰는 중 (업로드 대상 아님)
- *   kakaoscreen/kakaoscreen_yyyy-MM-dd.jsonl           ← 날이 바뀌어 확정된 것, 업로드 대상
+ *   screentext/rawscreentext_yyyy-MM-dd.jsonl.part   ← 오늘치, 계속 이어 쓰는 중 (업로드 대상 아님)
+ *   screentext/screentext_yyyy-MM-dd.jsonl           ← 날이 바뀌어 확정된 것, 업로드 대상
  *
  * 한 줄에 레코드 하나. `kind`로 종류를 구분한다.
  *  - screen  : 화면을 한 번 읽은 결과. 새로 나타난 글자 노드만 담는다
  *  - service : 접근성 서비스가 붙거나 끊긴 시점. 이 사이가 데이터 공백 구간이다
  */
-object KakaoScreenLog {
-    private const val TAG = "KakaoScreenLog"
-    private const val RAW_PREFIX = "rawkakaoscreen_"
-    private const val DONE_PREFIX = "kakaoscreen_"
+object ScreenTextLog {
+    private const val TAG = "ScreenTextLog"
+    private const val RAW_PREFIX = "rawscreentext_"
+    private const val DONE_PREFIX = "screentext_"
     private const val EXT = ".jsonl"
 
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val lock = Any()
 
     private fun rawFile(ctx: Context, dayMs: Long): File =
-        File(Storage.kakaoScreenDir(ctx), "$RAW_PREFIX${dayFormat.format(Date(dayMs))}$EXT${Storage.PART}")
+        File(Storage.screenTextDir(ctx), "$RAW_PREFIX${dayFormat.format(Date(dayMs))}$EXT${Storage.PART}")
 
     fun write(ctx: Context, timeMs: Long, record: JSONObject) {
         synchronized(lock) {
@@ -50,7 +50,7 @@ object KakaoScreenLog {
     fun finalizeCompletedDays(ctx: Context): Int = synchronized(lock) {
         val today = dayFormat.format(Date())
         var count = 0
-        val files = Storage.kakaoScreenDir(ctx).listFiles().orEmpty()
+        val files = Storage.screenTextDir(ctx).listFiles().orEmpty()
             .filter { it.isFile && it.name.startsWith(RAW_PREFIX) && it.name.endsWith("$EXT${Storage.PART}") }
         for (f in files) {
             val day = f.name.removePrefix(RAW_PREFIX).removeSuffix("$EXT${Storage.PART}")

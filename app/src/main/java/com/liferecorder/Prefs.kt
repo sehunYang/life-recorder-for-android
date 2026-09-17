@@ -53,9 +53,9 @@ object Prefs {
     fun isIncludeKakao(ctx: Context) = sp(ctx).getBoolean("include_kakao", true)
     fun setIncludeKakao(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_kakao", v).apply()
 
-    /** 접근성 서비스로 카카오톡 화면의 글자를 기록할지. 서비스 자체는 설정 > 접근성에서 따로 켜야 한다. */
-    fun isIncludeKakaoScreen(ctx: Context) = sp(ctx).getBoolean("include_kakao_screen", true)
-    fun setIncludeKakaoScreen(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_kakao_screen", v).apply()
+    /** 접근성 서비스로 화면의 글자를 기록할지. 서비스 자체는 설정 > 접근성에서 따로 켜야 한다. */
+    fun isIncludeScreenText(ctx: Context) = sp(ctx).getBoolean("include_screen_text", true)
+    fun setIncludeScreenText(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_screen_text", v).apply()
 
     /** 어느 앱이 앞에 떠 있었는지를 하루치 JSONL로 올릴지. */
     fun isIncludeApp(ctx: Context) = sp(ctx).getBoolean("include_app", true)
