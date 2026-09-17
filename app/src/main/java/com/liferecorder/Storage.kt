@@ -41,8 +41,17 @@ object Storage {
      */
     fun kakaoMediaDir(ctx: Context): File = File(baseDir(ctx), "kakaomedia").apply { mkdirs() }
 
+    /** 접근성 서비스가 카카오톡 화면에서 읽은 글자. `rawkakaoscreen_*`는 오늘치라 업로드하지 않는다. */
+    fun kakaoScreenDir(ctx: Context): File = File(baseDir(ctx), "kakaoscreen").apply { mkdirs() }
+
+    /** 어느 앱이 앞에 떠 있었는지의 하루치 기록. */
+    fun appDir(ctx: Context): File = File(baseDir(ctx), "app").apply { mkdirs() }
+
     private fun allDirs(ctx: Context) =
-        listOf(audioDir(ctx), screenDir(ctx), callDir(ctx), smsDir(ctx), kakaoDir(ctx), kakaoMediaDir(ctx), cameraDir(ctx), indexDir(ctx))
+        listOf(
+            audioDir(ctx), screenDir(ctx), callDir(ctx), smsDir(ctx), kakaoDir(ctx), kakaoMediaDir(ctx),
+            kakaoScreenDir(ctx), cameraDir(ctx), indexDir(ctx), appDir(ctx),
+        )
     private fun listAll(ctx: Context): List<File> =
         allDirs(ctx).flatMap { d -> d.listFiles()?.toList() ?: emptyList() }.filter { it.isFile }
 
@@ -66,8 +75,10 @@ object Storage {
         f.name.startsWith("camera_") -> "camera"
         f.name.startsWith("sms_") -> "sms"
         f.name.startsWith("index_") -> "index"
+        f.name.startsWith("app_") -> "app"
         // kakaoimg_ = 알림에서 받은 사진, kakaoexp_ = 내보내기 폴더에서 가져온 미디어.
         f.name.startsWith("kakaoimg_") || f.name.startsWith("kakaoexp_") -> "kakaomedia"
+        f.name.startsWith("kakaoscreen_") -> "kakaoscreen"
         f.name.startsWith("kakao_") -> "kakao"
         else -> "audio"
     }
@@ -145,8 +156,9 @@ object Storage {
      *  - call  *.part     → 복사 도중 죽은 것. 원본이 그대로 있으니 지우면 다음에 다시 가져온다
      *  - kakao_*.part     → 확정/복사 도중 죽은 것. 다음 실행에서 다시 만들어진다
      *  - sms_*.part       → 쓰다가 죽은 것. 해당 날짜를 다시 내보내면 된다
+     *  - app_*.part       → 같음
      *
-     * `rawkakao_*.jsonl.part`(알림 로그)와 `rawindex_*.jsonl.part`(수집 기록)는
+     * `rawkakao_*`(알림 로그) · `rawkakaoscreen_*`(화면 글자) · `rawindex_*`(수집 기록)의 `.jsonl.part`는
      * 계속 이어 쓰는 오늘치 파일이라 절대 건드리지 않는다.
      */
     fun processLeftovers(files: List<File>) = synchronized(recoveryLock) {
@@ -156,9 +168,9 @@ object Storage {
         }
         files.filter {
             it.name.startsWith("screen_") || it.name.startsWith("call_") || it.name.startsWith("camera_") ||
-                it.name.startsWith("sms_") || it.name.startsWith("kakao_") ||
+                it.name.startsWith("sms_") || it.name.startsWith("kakao_") || it.name.startsWith("kakaoscreen_") ||
                 it.name.startsWith("kakaoimg_") || it.name.startsWith("kakaoexp_") ||
-                it.name.startsWith("index_")
+                it.name.startsWith("index_") || it.name.startsWith("app_")
         }.forEach { f ->
             if (f.exists()) { Log.i(TAG, "dropping incomplete ${f.name}"); f.delete() }
         }

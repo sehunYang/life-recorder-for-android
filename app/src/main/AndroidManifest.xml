@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 어느 앱이 앞에 떠 있었는지(UsageEvents)를 읽기 위해. 설정 > 사용 정보 접근에서 사용자가 허용한다 -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- 그 앱의 이름("카카오톡")을 패키지명 옆에 붙이기 위해. 직접 빌드해 쓰는 앱이라 스토어 제약과 무관하다 -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <!-- 삼성 통화 녹음(공용 저장소 Recordings/Call)을 읽어 함께 업로드하기 위해 -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <!-- 카메라로 찍은 사진·동영상(DCIM/Camera)을 복사해 함께 업로드하기 위해 -->
@@ -61,6 +70,21 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+
+        <!-- 카카오톡 화면의 글자 읽기. 설정 > 접근성에서 사용자가 직접 켜야 한다.
+             알림에 안 오는 내 발화·열어 둔 방의 메시지·그룹방 이름이 여기서 나온다. -->
+        <service
+            android:name=".kakao.KakaoAccessibilityService"
+            android:exported="true"
+            android:label="Life Recorder (카카오톡 화면 읽기)"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/kakao_accessibility" />
         </service>
 
         <!-- 카카오톡 대화 내용 내보내기 → 다른 앱으로 공유 → Life Recorder -->

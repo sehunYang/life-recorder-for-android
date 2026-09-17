@@ -63,8 +63,12 @@ data class UiActions(
     val setIncludeCalls: (Boolean) -> Unit,
     val setIncludeCamera: (Boolean) -> Unit,
     val setIncludeSms: (Boolean) -> Unit,
+    val setIncludeApp: (Boolean) -> Unit,
+    val openUsageAccess: () -> Unit,
     val setIncludeKakao: (Boolean) -> Unit,
     val openNotificationAccess: () -> Unit,
+    val setIncludeKakaoScreen: (Boolean) -> Unit,
+    val openAccessibilitySettings: () -> Unit,
     val setKakaoDump: (Boolean) -> Unit,
     val importKakaoExport: () -> Unit,
     val importKakaoFolder: () -> Unit,
@@ -79,8 +83,12 @@ fun MainScreen(
     includeCalls: Boolean,
     includeCamera: Boolean,
     includeSms: Boolean,
+    includeApp: Boolean,
+    appAccessOn: Boolean,
     includeKakao: Boolean,
     kakaoAccessOn: Boolean,
+    includeKakaoScreen: Boolean,
+    kakaoScreenOn: Boolean,
     kakaoDump: Boolean,
     batteryExempt: Boolean,
     actions: UiActions,
@@ -97,8 +105,8 @@ fun MainScreen(
             Header(status)
             Hero(status, actions)
             UploadCard(status, wifiOnly, chargingOnly, actions)
-            CollectCard(status, includeCalls, includeCamera, includeSms, actions)
-            KakaoCard(status, includeKakao, kakaoAccessOn, kakaoDump, actions)
+            CollectCard(status, includeCalls, includeCamera, includeSms, includeApp, appAccessOn, actions)
+            KakaoCard(status, includeKakao, kakaoAccessOn, includeKakaoScreen, kakaoScreenOn, kakaoDump, actions)
             KeepAliveCard(batteryExempt, actions)
             Spacer(Modifier.height(12.dp))
         }
@@ -283,6 +291,8 @@ private fun CollectCard(
     includeCalls: Boolean,
     includeCamera: Boolean,
     includeSms: Boolean,
+    includeApp: Boolean,
+    appAccessOn: Boolean,
     actions: UiActions,
 ) {
     SectionCard(icon = painterResource(R.drawable.ic_folder), title = "함께 모으기") {
@@ -307,11 +317,30 @@ private fun CollectCard(
             actions.setIncludeSms,
             subtitle = if (includeSms) status.smsExportNote ?: "어제까지의 SMS/MMS를 하루 단위로 올립니다" else "꺼짐",
         )
+        ToggleRow(
+            "앱 사용 기록",
+            includeApp,
+            actions.setIncludeApp,
+            subtitle = if (includeApp) {
+                status.appExportNote ?: "어느 앱이 앞에 떠 있었는지, 화면이 켜지고 잠긴 시각을 하루 단위로 올립니다"
+            } else "꺼짐",
+        )
+        AnimatedVisibility(includeApp && !appAccessOn) {
+            FilledTonalButton(onClick = actions.openUsageAccess, Modifier.fillMaxWidth()) { Text("사용 정보 접근 허용하기") }
+        }
     }
 }
 
 @Composable
-private fun KakaoCard(status: Status, includeKakao: Boolean, kakaoAccessOn: Boolean, kakaoDump: Boolean, actions: UiActions) {
+private fun KakaoCard(
+    status: Status,
+    includeKakao: Boolean,
+    kakaoAccessOn: Boolean,
+    includeKakaoScreen: Boolean,
+    kakaoScreenOn: Boolean,
+    kakaoDump: Boolean,
+    actions: UiActions,
+) {
     SectionCard(
         icon = painterResource(R.drawable.ic_chat),
         title = "카카오톡",
@@ -339,6 +368,22 @@ private fun KakaoCard(status: Status, includeKakao: Boolean, kakaoAccessOn: Bool
             OutlinedButton(onClick = actions.importKakaoExport, Modifier.weight(1f)) { Text("파일 고르기") }
             OutlinedButton(onClick = actions.importKakaoFolder, Modifier.weight(1f)) { Text("폴더 고르기") }
         }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        ToggleRow(
+            "화면에서 대화 읽기 (접근성)",
+            includeKakaoScreen,
+            actions.setIncludeKakaoScreen,
+            subtitle = when {
+                !includeKakaoScreen -> "꺼짐"
+                kakaoScreenOn -> "카카오톡 화면에 보이는 글자를 그대로 모으는 중"
+                else -> "설정 > 접근성에서 Life Recorder를 켜야 합니다"
+            },
+        )
+        AnimatedVisibility(includeKakaoScreen && !kakaoScreenOn) {
+            FilledTonalButton(onClick = actions.openAccessibilitySettings, Modifier.fillMaxWidth()) { Text("접근성 설정 열기") }
+        }
+        Hint("알림에 없는 내 발화·열어 둔 방의 메시지·그룹방 이름이 여기서 나옵니다. 카카오톡 외의 앱은 읽지 않습니다.")
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ToggleRow(

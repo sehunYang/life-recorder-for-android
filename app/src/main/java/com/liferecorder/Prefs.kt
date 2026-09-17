@@ -53,6 +53,18 @@ object Prefs {
     fun isIncludeKakao(ctx: Context) = sp(ctx).getBoolean("include_kakao", true)
     fun setIncludeKakao(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_kakao", v).apply()
 
+    /** 접근성 서비스로 카카오톡 화면의 글자를 기록할지. 서비스 자체는 설정 > 접근성에서 따로 켜야 한다. */
+    fun isIncludeKakaoScreen(ctx: Context) = sp(ctx).getBoolean("include_kakao_screen", true)
+    fun setIncludeKakaoScreen(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_kakao_screen", v).apply()
+
+    /** 어느 앱이 앞에 떠 있었는지를 하루치 JSONL로 올릴지. */
+    fun isIncludeApp(ctx: Context) = sp(ctx).getBoolean("include_app", true)
+    fun setIncludeApp(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_app", v).apply()
+
+    /** 마지막으로 내보낸 앱 사용 기록 날짜 (yyyy-MM-dd). */
+    fun appLastExportDay(ctx: Context): String? = sp(ctx).getString("app_last_day", null)
+    fun setAppLastExportDay(ctx: Context, day: String) = sp(ctx).edit().putString("app_last_day", day).apply()
+
     /** 진단용. 카카오톡 알림 원본을 통째로 별도 파일에 덤프한다. 용량이 크니 평소엔 끈다. */
     fun isKakaoDump(ctx: Context) = sp(ctx).getBoolean("kakao_dump", false)
     fun setKakaoDump(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("kakao_dump", v).apply()

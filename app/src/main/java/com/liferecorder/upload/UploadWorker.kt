@@ -11,6 +11,7 @@ import com.liferecorder.RecorderState
 import com.liferecorder.Storage
 import com.liferecorder.kakao.KakaoLog
 import com.liferecorder.kakao.KakaoNotificationListener
+import com.liferecorder.kakao.KakaoScreenLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -58,11 +59,13 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
                 importCallRecordings(ctx)
                 importCameraMedia(ctx)
                 exportSms(ctx)
+                exportAppUsage(ctx)
             } else {
                 Log.w(TAG, "index restore pending, skipping importers")
                 RecorderState.update { it.copy(lastUploadError = "수집 기록 복원 대기 중 (가져오기 건너뜀)") }
             }
             finalizeKakao(ctx)
+            finalizeKakaoScreen(ctx)
             finalizeIndex(ctx)
             RecorderState.refreshPending(ctx)
 
@@ -153,6 +156,34 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         }
     }
 
+    /** 어제까지의 앱 사용 기록(어느 앱이 앞에 있었나)을 하루 단위 JSONL로 내보낸다. */
+    private fun exportAppUsage(ctx: Context) {
+        if (!Prefs.isIncludeApp(ctx)) {
+            RecorderState.update { it.copy(appExportNote = null) }
+            return
+        }
+        if (!AppUsageExporter.hasPermission(ctx)) {
+            RecorderState.update { it.copy(appExportNote = "사용 정보 접근 권한 필요") }
+            return
+        }
+        try {
+            val n = AppUsageExporter.exportPending(ctx)
+            RecorderState.update { it.copy(appExportNote = if (n > 0) "${n}일치 새로 만듦" else "새 날짜 없음") }
+        } catch (e: Exception) {
+            Log.w(TAG, "app usage export failed", e)
+            RecorderState.update { it.copy(appExportNote = "내보내기 실패: ${e.message}") }
+        }
+    }
+
+    /** 날이 지난 카카오톡 화면 글자 로그를 업로드 대상으로 확정한다. */
+    private fun finalizeKakaoScreen(ctx: Context) {
+        try {
+            KakaoScreenLog.finalizeCompletedDays(ctx)
+        } catch (e: Exception) {
+            Log.w(TAG, "kakao screen finalize failed", e)
+        }
+    }
+
     /** 날이 지난 카카오톡 알림 로그를 업로드 대상으로 확정한다. 내용은 손대지 않는다. */
     private fun finalizeKakao(ctx: Context) {
         if (!Prefs.isIncludeKakao(ctx)) {
@@ -200,10 +231,14 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             ?: client.ensureFolder(Config.DRIVE_CAMERA_FOLDER, root).also { Prefs.setFolderId(ctx, "camera", it) }
         val index = Prefs.folderId(ctx, "index")
             ?: client.ensureFolder(Config.DRIVE_INDEX_FOLDER, root).also { Prefs.setFolderId(ctx, "index", it) }
+        val app = Prefs.folderId(ctx, "app")
+            ?: client.ensureFolder(Config.DRIVE_APP_FOLDER, root).also { Prefs.setFolderId(ctx, "app", it) }
+        val kakaoScreen = Prefs.folderId(ctx, "kakaoscreen")
+            ?: client.ensureFolder(Config.DRIVE_KAKAO_SCREEN_FOLDER, root).also { Prefs.setFolderId(ctx, "kakaoscreen", it) }
         return mapOf(
             "audio" to audio, "screen" to screen, "call" to call,
             "sms" to sms, "kakao" to kakao, "kakaomedia" to kakaoMedia,
-            "camera" to camera, "index" to index,
+            "camera" to camera, "index" to index, "app" to app, "kakaoscreen" to kakaoScreen,
         )
     }
 

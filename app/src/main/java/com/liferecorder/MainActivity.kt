@@ -22,12 +22,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.work.ExistingWorkPolicy
 import com.google.android.gms.common.api.ApiException
+import com.liferecorder.kakao.KakaoAccessibilityService
 import com.liferecorder.kakao.KakaoImport
 import com.liferecorder.kakao.KakaoNotificationListener
 import com.liferecorder.service.RecordingService
 import com.liferecorder.ui.LifeRecorderTheme
 import com.liferecorder.ui.MainScreen
 import com.liferecorder.ui.UiActions
+import com.liferecorder.upload.AppUsageExporter
 import com.liferecorder.upload.DriveAuth
 import com.liferecorder.upload.UploadScheduler
 import kotlinx.coroutines.Dispatchers
@@ -42,8 +44,12 @@ class MainActivity : ComponentActivity() {
     private val includeCalls = mutableStateOf(true)
     private val includeCamera = mutableStateOf(false)
     private val includeSms = mutableStateOf(true)
+    private val includeApp = mutableStateOf(true)
+    private val appAccessOn = mutableStateOf(false)
     private val includeKakao = mutableStateOf(true)
     private val kakaoAccessOn = mutableStateOf(false)
+    private val includeKakaoScreen = mutableStateOf(true)
+    private val kakaoScreenOn = mutableStateOf(false)
     private val kakaoDump = mutableStateOf(false)
 
     private val kakaoFileLauncher =
@@ -171,7 +177,9 @@ class MainActivity : ComponentActivity() {
         includeCalls.value = Prefs.isIncludeCalls(this)
         includeCamera.value = Prefs.isIncludeCamera(this)
         includeSms.value = Prefs.isIncludeSms(this)
+        includeApp.value = Prefs.isIncludeApp(this)
         includeKakao.value = Prefs.isIncludeKakao(this)
+        includeKakaoScreen.value = Prefs.isIncludeKakaoScreen(this)
         kakaoDump.value = Prefs.isKakaoDump(this)
         setContent {
             val status by RecorderState.status.collectAsStateWithLifecycle()
@@ -183,8 +191,12 @@ class MainActivity : ComponentActivity() {
                     includeCalls = includeCalls.value,
                     includeCamera = includeCamera.value,
                     includeSms = includeSms.value,
+                    includeApp = includeApp.value,
+                    appAccessOn = appAccessOn.value,
                     includeKakao = includeKakao.value,
                     kakaoAccessOn = kakaoAccessOn.value,
+                    includeKakaoScreen = includeKakaoScreen.value,
+                    kakaoScreenOn = kakaoScreenOn.value,
                     kakaoDump = kakaoDump.value,
                     batteryExempt = batteryExempt.value,
                     actions = UiActions(
@@ -226,12 +238,25 @@ class MainActivity : ComponentActivity() {
                                 if (v) UploadScheduler.enqueueNow(this, ExistingWorkPolicy.REPLACE, manual = true)
                             }
                         },
+                        setIncludeApp = { v ->
+                            Prefs.setIncludeApp(this, v)
+                            includeApp.value = v
+                            if (v && !AppUsageExporter.hasPermission(this)) openUsageAccess()
+                            else if (v) UploadScheduler.enqueueNow(this, ExistingWorkPolicy.REPLACE, manual = true)
+                        },
+                        openUsageAccess = ::openUsageAccess,
                         setIncludeKakao = { v ->
                             Prefs.setIncludeKakao(this, v)
                             includeKakao.value = v
                             if (v && !KakaoNotificationListener.isEnabled(this)) openNotificationAccess()
                         },
                         openNotificationAccess = ::openNotificationAccess,
+                        setIncludeKakaoScreen = { v ->
+                            Prefs.setIncludeKakaoScreen(this, v)
+                            includeKakaoScreen.value = v
+                            if (v && !KakaoAccessibilityService.isEnabled(this)) openAccessibilitySettings()
+                        },
+                        openAccessibilitySettings = ::openAccessibilitySettings,
                         setKakaoDump = { v ->
                             Prefs.setKakaoDump(this, v)
                             kakaoDump.value = v
@@ -275,6 +300,8 @@ class MainActivity : ComponentActivity() {
         val pm = getSystemService(PowerManager::class.java)
         batteryExempt.value = pm.isIgnoringBatteryOptimizations(packageName)
         kakaoAccessOn.value = KakaoNotificationListener.isEnabled(this)
+        kakaoScreenOn.value = KakaoAccessibilityService.isEnabled(this)
+        appAccessOn.value = AppUsageExporter.hasPermission(this)
         RecorderState.update { it.copy(recordingEnabled = Prefs.isRecordingEnabled(this)) }
         lifecycleScope.launch { withContext(Dispatchers.IO) { RecorderState.refreshPending(this@MainActivity) } }
     }
@@ -344,6 +371,24 @@ class MainActivity : ComponentActivity() {
             toast("목록에서 Life Recorder를 켜 주세요")
         } catch (e: Exception) {
             toast("알림 접근 설정을 열지 못했습니다")
+        }
+    }
+
+    private fun openUsageAccess() {
+        try {
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            toast("목록에서 Life Recorder를 켜 주세요")
+        } catch (e: Exception) {
+            toast("사용 정보 접근 설정을 열지 못했습니다")
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            toast("설치된 앱 > Life Recorder를 켜 주세요")
+        } catch (e: Exception) {
+            toast("접근성 설정을 열지 못했습니다")
         }
     }
 

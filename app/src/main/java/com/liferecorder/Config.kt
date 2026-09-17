@@ -35,6 +35,11 @@ object Config {
     const val DRIVE_KAKAO_MEDIA_FOLDER = "kakao-media"
     const val DRIVE_CAMERA_FOLDER = "camera"
     const val DRIVE_INDEX_FOLDER = "index"
+    const val DRIVE_APP_FOLDER = "app"
+    const val DRIVE_KAKAO_SCREEN_FOLDER = "kakao-screen"
+
+    /** 앱 사용 기록을 처음 켤 때 며칠 전까지 거슬러 올라갈지. 시스템이 UsageEvents를 들고 있는 기간 안에서. */
+    const val APP_USAGE_BACKFILL_DAYS = 7
 
     /** 카카오톡 패키지명. 알림 가로채기 대상. */
     const val KAKAO_PACKAGE = "com.kakao.talk"

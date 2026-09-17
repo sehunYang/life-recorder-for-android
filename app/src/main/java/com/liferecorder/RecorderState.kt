@@ -28,6 +28,8 @@ data class Status(
     val smsExportNote: String? = null,
     /** 카카오톡 기록 상태 표시용. */
     val kakaoNote: String? = null,
+    /** 앱 사용 기록 내보내기 상태 표시용. */
+    val appExportNote: String? = null,
 )
 
 /** 서비스, 업로드 워커, UI가 공유하는 프로세스 내 상태. 단일 프로세스라서 그대로 공유된다. */
