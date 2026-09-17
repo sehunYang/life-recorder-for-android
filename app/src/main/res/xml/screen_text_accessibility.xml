@@ -11,11 +11,15 @@
      실측(2026-09-17, Flip 5): 삼성 인터넷은 이 설정으로도, feedbackSpoken 을 선언해도, 심지어
      시스템의 uiautomator 에도 웹 본문을 내놓지 않는다 (주소창·버튼만). 삼성 인터넷의 웹 본문은
      접근성으로는 못 얻고 화면 녹화(OCR)에만 남는다. feedbackSpoken 은 효과가 없어 두지 않았다 —
-     스크린리더로 분류되면 다른 앱의 동작이 달라질 수 있다. -->
+     스크린리더로 분류되면 다른 앱의 동작이 달라질 수 있다.
+
+     flagIncludeNotImportantViews — 하이브리드 앱(인천e음·버거킹·삼성카드 등)은 뷰를 "접근성에
+     중요하지 않음"으로 표시해 두어, 이 플래그가 없으면 시스템 uiautomator 에는 보이는 글자가
+     우리에게는 0건이었다 (2026-09-17 147개 앱 순회 실측). -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:description="@string/a11y_description"
     android:isAccessibilityTool="true"
