@@ -133,7 +133,11 @@ class KakaoNotificationListener : NotificationListenerService() {
         val person = m.person
         // MessagingStyle 규약: senderPerson이 null이면 기기 주인이 보낸 것.
         val fromMe = person == null
-        val sender = person?.name?.toString() ?: style.user?.name?.toString() ?: ME
+        val me = style.user
+        val sender = person?.name?.toString() ?: me?.name?.toString() ?: ME
+        // 카카오톡이 메시지마다 붙이는 고유 번호. 알림이 같은 메시지를 다시 실어 보내도 이 값은 같다.
+        // Long 범위가 JS의 안전 정수를 넘으므로 문자열로 남긴다 (roomId와 같은 이유).
+        val chatLogId = m.extras.get("chatLogId")?.toString()
 
         val record = baseRecord(sbn, n)
             .put("t", m.timestamp)
@@ -146,14 +150,19 @@ class KakaoNotificationListener : NotificationListenerService() {
             .put("isGroup", style.isGroupConversation)
             .put("senderKey", person?.key ?: JSONObject.NULL)
             .put("senderUri", person?.uri ?: JSONObject.NULL)
+            // 이 알림을 받은 계정의 카카오톡 표시 이름. 듀얼 메신저면 계정마다 다르다.
+            .put("me", me?.name?.toString() ?: JSONObject.NULL)
+            .put("meKey", me?.key ?: JSONObject.NULL)
+            .put("chatLogId", chatLogId ?: JSONObject.NULL)
             .put("dataMimeType", m.dataMimeType ?: JSONObject.NULL)
             .put("dataUri", m.dataUri?.toString() ?: JSONObject.NULL)
             // 사진은 지금 받아 두지 않으면 나중에 못 읽는다. 받아 둔 파일 이름을 같이 남긴다.
             .put("mediaFile", saveMedia(sbn, n, m) ?: JSONObject.NULL)
 
-        // 계정 + 발화 시각 + 방ID + 보낸이 + 본문이 같으면 같은 메시지로 본다.
+        // chatLogId가 있으면 그것이 곧 메시지의 정체다. 없을 때만 계정 + 발화 시각 + 방ID + 보낸이 + 본문으로 본다.
         // 방 이름(room)은 알림마다 흔들려서 키에 넣으면 같은 메시지가 여러 번 저장된다.
-        val key = "msg|${userOf(sbn)}|${m.timestamp}|${roomId(sbn, n)}|${personKey(person)}|${text.hashCode()}"
+        val key = if (chatLogId != null) "log|${userOf(sbn)}|${roomId(sbn, n)}|$chatLogId"
+        else "msg|${userOf(sbn)}|${m.timestamp}|${roomId(sbn, n)}|${personKey(person)}|${text.hashCode()}"
         KakaoLog.write(this, m.timestamp, record, key)
     }
 
