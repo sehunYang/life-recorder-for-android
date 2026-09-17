@@ -17,6 +17,7 @@ import java.util.Locale
  *
  * 한 줄에 레코드 하나. `kind`로 종류를 구분한다.
  *  - screen  : 화면을 한 번 읽은 결과. 새로 나타난 글자 노드만 담는다
+ *  - scroll  : 스크롤 한 번. 위치·전체 길이(웹) 또는 보이는 항목 번호·개수(목록)
  *  - service : 접근성 서비스가 붙거나 끊긴 시점. 이 사이가 데이터 공백 구간이다
  */
 object ScreenTextLog {

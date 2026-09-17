@@ -394,12 +394,17 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
           {"vid":"message","cls":"TextView","text":"응 먹었지","l":560,"t":1320,"r":1032,"b":1400}]}
 {"kind":"screen","t":1788500700000,"pkg":"com.android.chrome","activity":"org.chromium.chrome.browser.ChromeTabbedActivity",
  "title":"Chrome","nodes":[{"vid":"url_bar","cls":"EditText","text":"namu.wiki/w/운동량","l":120,"t":180,"r":960,"b":250}, ...]}
+{"kind":"scroll","t":1788500703000,"pkg":"com.android.chrome","cls":"WebView","y":1840,"max":9120,"dy":620,"from":-1,"to":-1,"count":-1}
+{"kind":"scroll","t":1788500710000,"pkg":"com.kakao.talk","cls":"RecyclerView","y":-1,"max":-1,"dy":0,"from":12,"to":19,"count":140}
 {"kind":"service","event":"connected","t":1788500000000}
 ```
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
-| `kind` | string | `"screen"` (한 번 읽은 결과) \| `"service"` (붙거나 끊긴 시점. 3.4와 같은 뜻) |
+| `kind` | string | `"screen"` (한 번 읽은 결과) \| `"scroll"` (스크롤 한 번) \| `"service"` (붙거나 끊긴 시점. 3.4와 같은 뜻) |
+| `y` `max` `dy` | int | `scroll`에만. 웹·스크롤뷰의 세로 위치(px)·끝·이번에 움직인 양. 없는 뷰는 `-1`. `y / max`가 읽은 깊이다 |
+| `from` `to` `count` | int | `scroll`에만. 목록(RecyclerView)에서 보이는 첫·끝 항목 번호와 전체 개수. 없는 뷰는 `-1` |
+| `cls` | string | `scroll`에만. 스크롤된 뷰의 클래스 짧은 이름 |
 | `t` | int (epoch ms) | 읽은 시각. **메시지가 보내진 시각이 아니다** |
 | `pkg` | string | 앞에 있던 앱의 패키지명. `app_`(3.9)의 `pkg`와 같은 값이라 서로 잇는다 |
 | `activity` | string \| null | 마지막으로 앞에 온 액티비티 (이름이 `Activity`로 끝나는 창만). 카카오톡 채팅방은 `ChatRoomHolderActivity`. **정확한 앱 전환 시각은 `app_`(3.9)이 맞다** |
@@ -425,6 +430,7 @@ MessagingStyle이 아닌 알림이다. 카카오톡에서 **"메시지 내용 �
 - 스크롤하면 **옛 내용이 다시 나타난다.** 카카오톡은 알림 로그와 본문·순서로 대조해 걸러야 한다
 - **입력창은 타자를 멈췄을 때만 남는다.** 편집 가능한 노드(`isEditable`)는 직전 스캔과 글이 같을 때만 적는다. 클래스 이름으로 가리지 않는다 — 카카오톡 입력창은 `MultiAutoCompleteTextView`다. 그래도 한 문장 안에서 잠깐 멈추면 그 중간 상태가 한 줄 남을 수 있다
 - 재생 막대(`SeekBar`·`ProgressBar`)는 뺐다. 유튜브가 1초마다 "3분 중 0분 41초"를 바꿔 초당 한 줄이 됐다 (실측 51건/2분)
+- **`scroll`은 "무엇이 보였나"(`screen`)에 "얼마나 깊이·어떤 리듬으로 내렸나"를 붙이는 것이다.** 플링 한 번에 이벤트가 수십 개 오므로 250ms 안의 것과 값이 같은 것은 버린다. 해석은 소비자 몫 — 조금씩 내리며 멈추면 읽은 것, 크게 몇 번에 바닥이면 훑은 것. 어느 뷰가 `y`/`max`를 주고 어느 뷰가 `from`/`to`만 주는지는 앱마다 다르다 (크롬 웹 본문은 실측 전)
 - **삼성 인터넷의 웹 페이지 본문은 오지 않는다.** 주소창(`location_bar_edit_text`)·탭 제목(`tab_list_item_title`)·버튼만 온다.
   삼성 인터넷이 접근성 트리에 웹 내용을 내놓지 않기 때문이다 — 서비스 설정을 어떻게 바꿔도, 시스템의 `uiautomator`로 떠도 같다 (2026-09-17 실측).
   **브라우저에서 읽은 글은 화면 mp4(OCR)에만 있다.** 탭 제목·URL로 "무엇을 봤는지"는 알 수 있다.

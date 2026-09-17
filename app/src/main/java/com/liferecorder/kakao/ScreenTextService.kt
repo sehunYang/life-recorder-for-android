@@ -58,6 +58,7 @@ class ScreenTextService : AccessibilityService() {
             // 대화상자·팝업도 같은 이벤트로 오고 그때 className 은 뷰 클래스다. 액티비티만 기억한다.
             event.className?.toString()?.takeIf { it.endsWith("Activity") }?.let { lastActivity = it }
         }
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) noteScroll(event, pkg)
         // 글자 하나 바뀔 때마다 이벤트가 수십 개 몰려온다. 잠깐 모았다가 한 번만 읽는다.
         if (scanPending) return
         scanPending = true
@@ -130,6 +131,38 @@ class ScreenTextService : AccessibilityService() {
         )
     }
 
+    private var lastScrollAt = 0L
+    private var lastScrollKey: String? = null
+
+    /**
+     * 스크롤 한 번을 한 줄로. 화면 글자(무엇이 보였나)만으로는 "끝까지 읽었나·어떤 리듬으로 내렸나"를
+     * 모른다. 위치와 전체 길이를 그대로 적고 해석은 소비자가 한다.
+     * 플링 한 번에 이벤트가 수십 개 온다. 250ms 안의 것과 값이 같은 것은 버린다.
+     */
+    private fun noteScroll(e: AccessibilityEvent, pkg: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastScrollAt < SCROLL_MIN_GAP_MS) return
+        val y = e.scrollY
+        val max = e.maxScrollY
+        val from = e.fromIndex
+        val to = e.toIndex
+        val key = "$pkg|$y|$max|$from|$to"
+        if (key == lastScrollKey) return
+        lastScrollAt = now
+        lastScrollKey = key
+        ScreenTextLog.write(
+            this, now,
+            JSONObject()
+                .put("kind", "scroll")
+                .put("t", now)
+                .put("pkg", pkg)
+                .put("cls", e.className?.toString()?.substringAfterLast('.') ?: JSONObject.NULL)
+                // 웹·스크롤뷰: 픽셀 위치와 끝. 목록(RecyclerView): 보이는 항목 번호와 전체 개수. 없는 쪽은 -1
+                .put("y", y).put("max", max).put("dy", e.scrollDeltaY)
+                .put("from", from).put("to", to).put("count", e.itemCount),
+        )
+    }
+
     /** 오래된 것부터 지운다. access-order 맵이라 앞쪽이 가장 오래 안 본 것이다. */
     private fun expire(now: Long) {
         if (editing.size > 200) editing.clear()
@@ -143,6 +176,7 @@ class ScreenTextService : AccessibilityService() {
     companion object {
         private const val TAG = "ScreenText"
         private const val SCAN_DELAY_MS = 700L
+        private const val SCROLL_MIN_GAP_MS = 250L
         private const val RECENT_TTL_MS = 120_000L
         private const val MAX_RECENT = 4000
         private const val MAX_NODES = 600
