@@ -220,6 +220,12 @@ adb exec-out run-as com.liferecorder cat /sdcard/Android/data/com.liferecorder/f
 **2026-09-17 실측 (7분 세션)**: 앱 13개 전환이 전부 `pkg`로 잡혔고, 그룹방 이름·보낸 메시지 말풍선(`l=377 r=1036`)이 잡혔다.
 발견한 문제 둘 — 카카오톡 입력창이 `EditText`가 아니라 `MultiAutoCompleteTextView`라 글자마다 24줄이 남았고,
 유튜브 `SeekBar`가 초당 한 줄을 만들었다. 둘 다 고쳤다 (`isEditable` + 두 번 연속 같을 때만, `SeekBar` 제외).
+안 되는 것도 확인했다 — 삼성 인터넷 웹 본문(서비스 설정을 바꿔도, `uiautomator dump`로 떠도 0건)과 에뮬레이터 화면(`LOADING…` 뿐).
+
+브라우저 본문이 오는지 다시 볼 때는 앱이 아니라 시스템 도구로 먼저 판정한다 — 이게 0이면 앱 쪽에서 할 수 있는 게 없다:
+```powershell
+adb shell uiautomator dump /sdcard/ui.xml; adb exec-out cat /sdcard/ui.xml | Select-String 'WebView' | Measure-Object
+```
 
 **앱 사용 기록**
 

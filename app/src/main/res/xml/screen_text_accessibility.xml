@@ -1,11 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 앱을 가리지 않고 화면의 글자를 읽는다. packageNames 를 두지 않는 것이 의도다.
      무엇을 버릴지는 내려받은 쪽이 정한다 (이 앱 자신과 비밀번호 칸만 코드에서 뺀다).
-     flagReportViewIds 가 있어야 노드에 뷰 id(viewIdResourceName)가 채워진다. -->
+     flagReportViewIds 가 있어야 노드에 뷰 id(viewIdResourceName)가 채워진다.
+
+     이벤트를 전부 받고(typeAllMask) isAccessibilityTool 을 켜는 이유 — Chromium(크롬·WebView)은
+     켜진 서비스가 이벤트 몇 종만 받는 "비밀번호 관리자 같은 것"으로 보이면 웹 본문을 빼고
+     폼 컨트롤만 노출하는 축소 모드로 돈다. 우리 handler 는 이벤트 종류를 보지 않고 모아서 읽으므로
+     비용은 늘지 않는다.
+
+     실측(2026-09-17, Flip 5): 삼성 인터넷은 이 설정으로도, feedbackSpoken 을 선언해도, 심지어
+     시스템의 uiautomator 에도 웹 본문을 내놓지 않는다 (주소창·버튼만). 삼성 인터넷의 웹 본문은
+     접근성으로는 못 얻고 화면 녹화(OCR)에만 남는다. feedbackSpoken 은 효과가 없어 두지 않았다 —
+     스크린리더로 분류되면 다른 앱의 동작이 달라질 수 있다. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
+    android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:description="@string/a11y_description"
+    android:isAccessibilityTool="true"
     android:notificationTimeout="300" />
