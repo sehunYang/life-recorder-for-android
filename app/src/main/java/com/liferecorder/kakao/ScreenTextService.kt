@@ -21,8 +21,13 @@ import org.json.JSONObject
  * 글자로 주므로 OCR 없이 원문이 남는다. 카카오톡이면 알림에 없는 내 발화·열어 둔 방의 메시지·
  * 그룹방 이름이, 다른 앱이면 문서·게시글·거래 내역이 그대로 온다.
  *
- * 무엇을 버릴지는 여기서 정하지 않는다. 내려받은 쪽이 정한다. 예외는 둘뿐이다 —
- * 비밀번호 입력란(시스템이 가리는 것)과 이 앱 자신의 화면.
+ * 무엇을 버릴지는 여기서 정하지 않는다. 내려받은 쪽이 정한다. 예외는 셋뿐이다 —
+ * 비밀번호 입력란(시스템이 가리는 것), 이 앱 자신의 화면, 그리고 **인증 화면 전체**.
+ *
+ * 인증 화면을 통째로 버리는 이유 (2026-09-19 추가): `isPassword` 는 입력란에만 붙는 표시라서,
+ * 금융 앱이 버튼으로 그린 PIN 판은 그 그물을 빠져나간다. 뱅크샐러드 PIN 화면에서 섞인 숫자판
+ * 0~9가 그대로 올라온 것을 실제로 확인했다. 숫자판만으로 PIN 이 되지는 않지만(어느 자리를
+ * 눌렀는지는 모으지 않는다) 남길 값어치가 없고, 나중에 좌표를 함께 모으면 그 순간 PIN 이 된다.
  *
  * 설정 > 접근성에서 사용자가 직접 켜야 한다.
  */
@@ -84,12 +89,24 @@ class ScreenTextService : AccessibilityService() {
         val nodes = JSONArray()
         val rect = Rect()
         var visited = 0
+        // 비밀번호 화면인지 판정할 재료. 한 노드씩 거르는 것으로는 안 되기 때문이다 — 아래 참조.
+        var sawPasswordField = false
+        var sawAuthVid = false
+        val digits = HashSet<String>()
+        // 이번 스캔에서 남길 후보. **비밀번호 화면으로 판정되면 통째로 버린다.**
+        // `recent` 는 여기서 건드리지 않는다 — 버린 화면을 "이미 봤다" 고 기억하면,
+        // 같은 자리에 나중에 들어온 진짜 내용이 조용히 사라진다.
+        val pending = ArrayList<Pair<String, JSONObject>>(64)
+
         fun walk(n: AccessibilityNodeInfo?, depth: Int) {
             if (n == null || visited >= MAX_NODES || depth > MAX_DEPTH) return
             visited++
             val cls = n.className?.toString().orEmpty()
             val text = n.text?.toString() ?: n.contentDescription?.toString()
             val vid = n.viewIdResourceName
+            if (n.isPassword) sawPasswordField = true
+            if (vid != null && AUTH_VIDS.any { vid.contains(it, ignoreCase = true) }) sawAuthVid = true
+            if (text != null && text.length == 1 && text[0] in '0'..'9') digits.add(text)
             // 비밀번호 칸은 시스템이 가린 채로 주지만 그마저 남기지 않는다.
             // 재생 막대(SeekBar)는 1초마다 "3분 중 0분 41초"가 바뀌어 초당 한 줄이 된다. 내용이 아니라 상태다.
             var skip = n.isPassword || cls.endsWith("SeekBar") || cls.endsWith("ProgressBar")
@@ -102,19 +119,36 @@ class ScreenTextService : AccessibilityService() {
             if (!text.isNullOrBlank() && n.isVisibleToUser && !skip) {
                 n.getBoundsInScreen(rect)
                 val key = "$pkg|$title|$vid|$text|${rect.left},${rect.top},${rect.right},${rect.bottom}"
-                if (recent.put(key, now) == null) {
-                    nodes.put(
-                        JSONObject()
-                            .put("vid", vid?.substringAfter(":id/") ?: JSONObject.NULL)
-                            .put("cls", cls.substringAfterLast('.'))
-                            .put("text", text)
-                            .put("l", rect.left).put("t", rect.top).put("r", rect.right).put("b", rect.bottom)
-                    )
-                }
+                pending.add(
+                    key to JSONObject()
+                        .put("vid", vid?.substringAfter(":id/") ?: JSONObject.NULL)
+                        .put("cls", cls.substringAfterLast('.'))
+                        .put("text", text)
+                        .put("l", rect.left).put("t", rect.top).put("r", rect.right).put("b", rect.bottom)
+                )
             }
             for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)
         }
         walk(root, 0)
+
+        // ── 비밀번호 화면은 통째로 버린다 ──────────────────────────────────
+        //
+        // `isPassword` 만으로는 모자란다. 그것은 **입력란**에 붙는 표시이고, 금융 앱의 PIN 판은
+        // 대개 버튼·글자 뷰로 그려진다 (실측 2026-09-18: 뱅크샐러드 PIN 화면에서
+        // `passwordCircle1~4` 와 섞인 숫자판 0~9가 그대로 올라왔다).
+        //
+        // 숫자판만으로 PIN 이 되지는 않는다 — 어느 자리를 눌렀는지는 모으지 않으므로.
+        // 그래도 남길 이유가 없고, 나중에 좌표를 함께 모으게 되면 그 순간 PIN 이 된다.
+        // **쓸모가 없고 위험이 커질 수 있는 것은 애초에 남기지 않는다.**
+        //
+        // 세 신호 가운데 하나라도 걸리면 이 화면은 없던 것으로 한다.
+        // 화면 글자로는 판정하지 않는다 — `AUTH_VIDS` 설명에 그 이유가 있다.
+        val keypad = digits.size >= KEYPAD_DIGITS
+        if (sawPasswordField || sawAuthVid || keypad) return
+
+        for ((key, node) in pending) {
+            if (recent.put(key, now) == null) nodes.put(node)
+        }
 
         if (nodes.length() == 0 && pkg == lastPkg && title == lastTitle) return
         lastPkg = pkg
@@ -181,6 +215,28 @@ class ScreenTextService : AccessibilityService() {
         private const val MAX_RECENT = 4000
         private const val MAX_NODES = 600
         private const val MAX_DEPTH = 40
+
+        /**
+         * 한 화면에 서로 다른 한 자리 숫자가 이만큼 있으면 숫자판으로 본다.
+         *
+         * 8로 잡은 이유: PIN 판은 0~9 열 개가 다 있지만, 스크롤·가림으로 몇 개가 안 보일 수 있다.
+         * 반대로 평범한 화면에 서로 다른 한 자리 숫자가 여덟 개나 따로 떨어져 있는 일은 드물다.
+         * 계산기·전화 키패드도 함께 걸리는데, 그쪽도 남길 값어치가 없으니 문제가 되지 않는다.
+         */
+        private const val KEYPAD_DIGITS = 8
+
+        /**
+         * 인증 화면임을 알려 주는 **뷰 id**. 글자가 아니라 id 로 보는 이유가 있다.
+         *
+         * 처음에는 화면 글자에서 "비밀번호"·"PIN"·"OTP" 를 찾으려 했는데, 실제 데이터(2026-09-18
+         * 7,689 화면)에 대보니 오탐이 압도적이었다 — `PIN` 이 유튜브 채널명 `@CampingCamping9`
+         * 에, `OTP` 가 런처의 앱 이름 `나이스OTP` 에, `비밀번호` 가 광고 문자 본문에 걸렸다.
+         * 그 문자를 통째로 버리면 진짜 내용을 잃는다.
+         *
+         * 뷰 id 는 개발자가 붙인 이름이라 사용자 글이 섞이지 않는다. `pin` 만으로는 `spinner`
+         * 까지 걸리므로 쓰지 않고, 확실한 조합만 둔다.
+         */
+        private val AUTH_VIDS = listOf("password", "passcode", "pincode", "pinpad", "keypad")
 
         /** 사용자가 설정 > 접근성에서 이 서비스를 켰는지. */
         fun isEnabled(ctx: Context): Boolean {
