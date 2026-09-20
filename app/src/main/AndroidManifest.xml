@@ -111,7 +111,8 @@
             </intent-filter>
         </activity>
 
-        <!-- 홈 화면 2x1 위젯. 누를 때마다 기록이 켜지고 꺼진다. -->
+        <!-- 홈 화면 위젯. 누를 때마다 기록이 켜지고 꺼진다. 가로 2x1과 세로 1x2 두 가지다.
+             위젯 고르는 화면에 두 크기를 따로 내보이려면 provider도 둘이어야 한다. -->
         <receiver
             android:name=".widget.RecordWidget"
             android:exported="true"
@@ -122,6 +123,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_record_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.RecordWidgetTall"
+            android:exported="true"
+            android:label="@string/widget_label_tall">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_record_tall_info" />
         </receiver>
 
         <receiver

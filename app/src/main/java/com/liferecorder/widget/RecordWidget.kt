@@ -18,7 +18,8 @@ import com.liferecorder.service.ProjectionRequestActivity
 import com.liferecorder.service.RecordingService
 
 /**
- * 홈 화면 2x1 위젯. 위젯 전체가 버튼 하나이고, 누를 때마다 기록이 켜지고 꺼진다.
+ * 홈 화면 위젯. 위젯 전체가 버튼 하나이고, 누를 때마다 기록이 켜지고 꺼진다.
+ * 가로 2x1이 기본이고, 세로 1x2는 [RecordWidgetTall]이다. 둘은 생김새만 다르고 하는 일은 같다.
  *
  * 끄기는 곧바로 된다 (서비스에 중지 신호만 보내면 된다).
  * 켜기는 소리 녹음을 바로 시작한 뒤 화면 녹화 동의 창을 띄운다.
@@ -30,10 +31,13 @@ import com.liferecorder.service.RecordingService
  * 양쪽 모두에서 면제 대상이다. 그래서 앱 화면을 열지 않고도 녹음을 시작할 수 있다.
  * 다만 마이크·알림 권한이 아직 없으면 위젯에서 물어볼 수 없으므로 앱을 연다.
  */
-class RecordWidget : AppWidgetProvider() {
+open class RecordWidget : AppWidgetProvider() {
+
+    /** 세로형은 폭이 한 칸뿐이라 배치와 글이 다르다. */
+    protected open val tall: Boolean get() = false
 
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-        val views = render(ctx)
+        val views = render(ctx, tall)
         ids.forEach { mgr.updateAppWidget(it, views) }
     }
 
@@ -104,28 +108,35 @@ class RecordWidget : AppWidgetProvider() {
          */
         fun refresh(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx) ?: return
-            val ids = mgr.getAppWidgetIds(ComponentName(ctx, RecordWidget::class.java))
-            if (ids.isEmpty()) return
-            val views = render(ctx)
-            ids.forEach { mgr.updateAppWidget(it, views) }
+            for ((cls, tall) in listOf(RecordWidget::class.java to false, RecordWidgetTall::class.java to true)) {
+                val ids = mgr.getAppWidgetIds(ComponentName(ctx, cls))
+                if (ids.isEmpty()) continue
+                val views = render(ctx, tall)
+                ids.forEach { mgr.updateAppWidget(it, views) }
+            }
         }
 
         /**
          * 화면에 보일 내용. 프로세스가 죽었다 살아난 직후에도 맞아야 하므로
          * 메모리에 있는 [com.liferecorder.RecorderState]가 아니라 디스크에 남는 [Prefs]를 본다.
          */
-        private fun render(ctx: Context): RemoteViews {
+        private fun render(ctx: Context, tall: Boolean): RemoteViews {
             val on = Prefs.isRecordingEnabled(ctx)
             val screen = on && Prefs.wasScreenRecording(ctx)
-            return RemoteViews(ctx.packageName, R.layout.widget_record).apply {
+            val layout = if (tall) R.layout.widget_record_tall else R.layout.widget_record
+            return RemoteViews(ctx.packageName, layout).apply {
                 setImageViewResource(R.id.widget_bg, if (on) R.drawable.widget_bg_on else R.drawable.widget_bg_off)
                 setImageViewResource(R.id.widget_icon, if (on) R.drawable.ic_rec else R.drawable.ic_mic_dim)
-                setTextViewText(R.id.widget_title, ctx.getString(if (on) R.string.widget_on_title else R.string.widget_off_title))
+                val title = when {
+                    on -> if (tall) R.string.widget_tall_on_title else R.string.widget_on_title
+                    else -> if (tall) R.string.widget_tall_off_title else R.string.widget_off_title
+                }
+                setTextViewText(R.id.widget_title, ctx.getString(title))
                 setTextColor(R.id.widget_title, COLOR_TITLE)
                 val sub = when {
-                    !on -> R.string.widget_off_sub
-                    screen -> R.string.widget_on_sub_both
-                    else -> R.string.widget_on_sub_audio
+                    !on -> if (tall) R.string.widget_tall_off_sub else R.string.widget_off_sub
+                    screen -> if (tall) R.string.widget_tall_on_sub_both else R.string.widget_on_sub_both
+                    else -> if (tall) R.string.widget_tall_on_sub_audio else R.string.widget_on_sub_audio
                 }
                 setTextViewText(R.id.widget_sub, ctx.getString(sub))
                 setTextColor(R.id.widget_sub, if (on) COLOR_ON_SUB else COLOR_OFF_SUB)
