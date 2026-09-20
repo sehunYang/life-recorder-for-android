@@ -106,7 +106,11 @@ class ScreenTextService : AccessibilityService() {
             val vid = n.viewIdResourceName
             if (n.isPassword) sawPasswordField = true
             if (vid != null && AUTH_VIDS.any { vid.contains(it, ignoreCase = true) }) sawAuthVid = true
-            if (text != null && text.length == 1 && text[0] in '0'..'9') digits.add(text)
+            // 숫자판 버튼은 `contentDescription` 으로 오는 일이 많고, 그때 **뒤에 공백이 붙는다**
+            // (2026-09-20 실측: 뱅크샐러드 PIN 판이 `"0 "`~`"9 "`). 다듬지 않으면 길이 1 검사를
+            // 빠져나가 이 백스톱이 있으나 마나가 된다. 뷰 id 가 없는 앱에서는 이것만 남는다.
+            val one = text?.trim()
+            if (one != null && one.length == 1 && one[0] in '0'..'9') digits.add(one)
             // 비밀번호 칸은 시스템이 가린 채로 주지만 그마저 남기지 않는다.
             // 재생 막대(SeekBar)는 1초마다 "3분 중 0분 41초"가 바뀌어 초당 한 줄이 된다. 내용이 아니라 상태다.
             var skip = n.isPassword || cls.endsWith("SeekBar") || cls.endsWith("ProgressBar")
