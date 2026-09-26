@@ -20,11 +20,16 @@ import com.liferecorder.RecorderState
 import com.liferecorder.SegmentClock
 import com.liferecorder.Storage
 import java.io.File
+import java.nio.ByteBuffer
 
 /**
- * MediaProjection → VirtualDisplay → H.264 surface encoder → MediaMuxer.
+ * MediaProjection → VirtualDisplay → H.264 surface encoder → (잠깐 붙들기) → MediaMuxer.
  * 정각마다 키프레임을 요청해서 그 키프레임부터 새 mp4로 이어 쓴다 (프레임 손실 없음).
  * 모든 인코더/먹서 작업은 전용 HandlerThread에서만 한다.
+ *
+ * 인코딩된 프레임은 [Config.SCREEN_HOLD_US] 만큼 붙들었다가 쓴다. 비공개 앱(Brave 등)은
+ * 창이 뜬 **뒤에야** 판정되므로, 판정 순간 이미 인코딩된 여는 애니메이션 프레임을 되돌려
+ * 버리려면 아직 파일에 쓰지 않은 채여야 한다.
  */
 class ScreenRecorderSession(
     private val ctx: Context,
@@ -50,6 +55,15 @@ class ScreenRecorderSession(
     private var track = -1
     private var rotatePending = false
     @Volatile private var finished = false
+    /** 파일에 쓰기 전 붙들고 있는 프레임. 오래된 것이 앞이다. */
+    private val held = ArrayDeque<Sample>()
+    private var drainScheduled = false
+    private var captureEnabled = true
+    /** 비공개 앱이 떠 있는 동안. 캡처 입력을 끊고, 그래도 나오는 반복 프레임은 버린다. */
+    private var privateMode = false
+    /** 프레임을 버린 뒤다. 뒤 프레임이 버린 것을 참조하므로 다음 키프레임까지 쓰지 않는다. */
+    private var needKey = false
+    private var ptsChecked = false
     private var stopCallback: (() -> Unit)? = null
 
     /** 다음 정각(벽시계). postDelayed는 uptime 기준이라 시계 보정에 어긋날 수 있어 1분마다 벽시계로 다시 확인한다. */
@@ -91,11 +105,40 @@ class ScreenRecorderSession(
     fun setCaptureEnabled(enabled: Boolean) {
         handler.post {
             if (finished) return@post
-            try {
-                display?.setSurface(if (enabled) inputSurface else null)
-            } catch (e: Exception) {
-                Log.w(TAG, "setSurface failed", e)
+            captureEnabled = enabled
+            applySurface()
+        }
+    }
+
+    /**
+     * 비공개 앱이 뜨면 붙들고 있던 프레임 가운데 최근 [Config.SCREEN_PRIVATE_LOOKBACK_US] 것을 버리고
+     * (판정보다 먼저 찍힌 여는 애니메이션), 캡처 입력을 끊는다. 끊어도 인코더는 마지막 프레임을
+     * 10초마다 반복해 내놓는데 그것이 비공개 앱의 화면일 수 있으므로 그동안 나오는 것은 모두 버린다.
+     * 풀리면 키프레임을 요청하고 그 키프레임부터 다시 쓴다.
+     */
+    fun setPrivate(on: Boolean) {
+        handler.post {
+            if (finished || privateMode == on) return@post
+            privateMode = on
+            if (on) {
+                val cut = nowUs() - Config.SCREEN_PRIVATE_LOOKBACK_US
+                var dropped = 0
+                while (held.isNotEmpty() && held.last().pts >= cut) { held.removeLast(); dropped++ }
+                needKey = true
+                Log.i(TAG, "private on: dropped $dropped held frames")
+            } else {
+                Log.i(TAG, "private off")
             }
+            applySurface()
+            if (!on) requestSyncFrame()
+        }
+    }
+
+    private fun applySurface() {
+        try {
+            display?.setSurface(if (captureEnabled && !privateMode) inputSurface else null)
+        } catch (e: Exception) {
+            Log.w(TAG, "setSurface failed", e)
         }
     }
 
@@ -175,6 +218,51 @@ class ScreenRecorderSession(
         }
     }
 
+    private fun nowUs() = System.nanoTime() / 1000
+
+    /**
+     * 되돌려 버리기는 프레임 시각이 [System.nanoTime] 과 같은 시계라는 데 기댄다 (VirtualDisplay 의
+     * 서피스 시각은 CLOCK_MONOTONIC). 어긋난 기기에서는 로그로 드러나게 한 번만 적는다.
+     */
+    private fun checkPts(pts: Long) {
+        if (ptsChecked) return
+        ptsChecked = true
+        Log.i(TAG, "pts - now = ${(pts - nowUs()) / 1000}ms")
+    }
+
+    private fun scheduleDrain() {
+        if (drainScheduled || held.isEmpty()) return
+        drainScheduled = true
+        val wait = (held.first().pts + Config.SCREEN_HOLD_US - nowUs()) / 1000
+        handler.postDelayed({ drainScheduled = false; drain(all = false) }, wait.coerceIn(0L, 5_000L))
+    }
+
+    /** 붙든 지 [Config.SCREEN_HOLD_US] 가 지난 프레임을 파일에 쓴다. all 이면 전부. */
+    private fun drain(all: Boolean) {
+        if (finished && !all) return
+        val limit = nowUs() - Config.SCREEN_HOLD_US
+        while (held.isNotEmpty() && (all || held.first().pts <= limit)) write(held.removeFirst())
+        if (!all) scheduleDrain()
+    }
+
+    private fun write(s: Sample) {
+        val key = s.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
+        if (needKey) {
+            if (!key) return
+            needKey = false
+        }
+        if (rotatePending && key) {
+            rotatePending = false
+            closeMuxer()
+        }
+        if (muxer == null && key) openMuxer()
+        val m = muxer ?: return
+        val info = MediaCodec.BufferInfo().apply { set(0, s.data.size, s.pts, s.flags) }
+        m.writeSampleData(track, ByteBuffer.wrap(s.data), info)
+    }
+
+    private class Sample(val data: ByteArray, val pts: Long, val flags: Int)
+
     private fun openMuxer() {
         val fmt = outputFormat ?: return
         val file = Storage.newScreenPart(ctx, System.currentTimeMillis())
@@ -214,21 +302,19 @@ class ScreenRecorderSession(
                 val eos = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                 val config = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
                 val key = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
-                if (!config && info.size > 0) {
-                    if (rotatePending && key) {
-                        rotatePending = false
-                        closeMuxer()
-                    }
-                    if (muxer == null && key) openMuxer()
-                    val m = muxer
+                if (!config && info.size > 0 && !privateMode) {
                     val buf = codec.getOutputBuffer(index)
-                    if (m != null && buf != null) {
+                    if (buf != null) {
                         buf.position(info.offset)
                         buf.limit(info.offset + info.size)
-                        m.writeSampleData(track, buf, info)
+                        val data = ByteArray(info.size)
+                        buf.get(data)
+                        held.addLast(Sample(data, info.presentationTimeUs, info.flags))
+                        checkPts(info.presentationTimeUs)
                     }
                 }
                 codec.releaseOutputBuffer(index, false)
+                if (eos) drain(all = true) else scheduleDrain()
                 // codec.stop()을 코덱 콜백 안에서 부르면 멈출 수 있어 콜백 밖으로 미룬다.
                 if (eos) handler.post { finish(null) }
             } catch (e: Exception) {
@@ -261,6 +347,7 @@ class ScreenRecorderSession(
         codec = null
         inputSurface?.release()
         inputSurface = null
+        try { drain(all = true) } catch (e: Exception) { Log.w(TAG, "final drain failed", e) }
         closeMuxer()
         try { projection.unregisterCallback(projectionCallback) } catch (_: Exception) {}
         // 시스템이 이미 끝낸 뒤라면 no-op. 오류 경로에서도 세션이 새지 않도록 항상 호출한다.

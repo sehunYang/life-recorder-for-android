@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Process
 import com.liferecorder.Config
 import com.liferecorder.Prefs
+import com.liferecorder.PrivateScreen
 import com.liferecorder.Storage
 import org.json.JSONObject
 import java.io.File
@@ -27,9 +28,19 @@ import java.util.Locale
  * 시스템이 남긴 UsageEvents를 읽는 것이라 이 앱이 죽어 있던 동안의 것도 되살아난다.
  * 다만 시스템은 며칠치만 들고 있으므로 오래 안 돌리면 그 앞은 비어 있다.
  * 설정 > 사용 정보 접근에서 이 앱을 허용해야 한다.
+ *
+ * 비공개 앱은 남기지 않는다. Brave 는 사건 전부를, Chrome 은 시크릿 탭이 떠 있던 구간
+ * (`PrivateScreen.intervals`, 앞뒤 [PRIVATE_MARGIN_MS] 여유)의 사건을 버린다.
+ * Chrome 은 일반 탭을 쓰다 시크릿으로 넘어가도 액티비티가 그대로라 사건이 없다 —
+ * 그때는 그 앞의 resumed 가 남아 사용 시간이 시크릿 구간까지 이어져 보인다.
  */
 object AppUsageExporter {
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    private val BRAVE_PKGS = listOf("com.brave.browser")
+    private val CHROME_PKGS = setOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary")
+    /** 시크릿 판정은 Chrome 이 앞에 뜬 뒤 조금 늦다. 그 resumed 까지 지우도록 앞뒤로 넓힌다. */
+    private const val PRIVATE_MARGIN_MS = 3_000L
 
     /** 남기는 사건만. 포그라운드 서비스·구성 변경·대기 버킷 같은 나머지는 버린다. */
     private val eventNames = mapOf(
@@ -60,9 +71,10 @@ object AppUsageExporter {
         val last = Prefs.appLastExportDay(ctx)?.let { runCatching { dayFormat.parse(it)?.time }.getOrNull() }
         var day = if (last != null) addDays(last, 1) else addDays(today, -Config.APP_USAGE_BACKFILL_DAYS)
         var count = 0
+        val hidden = PrivateScreen.intervals(ctx, PrivateScreen.CHROME_INCOGNITO)
         while (day < today) {
             val end = addDays(day, 1)
-            val lines = readDay(usm, pm, labels, day, end)
+            val lines = readDay(usm, pm, labels, hidden, day, end)
             if (lines.isNotEmpty()) {
                 val part = File(Storage.appDir(ctx), "app_${dayFormat.format(Date(day))}.jsonl${Storage.PART}")
                 part.writeText(lines.joinToString("\n") + "\n", Charsets.UTF_8)
@@ -79,6 +91,7 @@ object AppUsageExporter {
         usm: UsageStatsManager,
         pm: PackageManager,
         labels: MutableMap<String, String?>,
+        hidden: List<LongRange>,
         start: Long,
         end: Long,
     ): List<String> {
@@ -88,6 +101,8 @@ object AppUsageExporter {
         while (events.getNextEvent(e)) {
             val name = eventNames[e.eventType] ?: continue
             val pkg = e.packageName ?: "android"
+            if (BRAVE_PKGS.any { pkg.startsWith(it) }) continue
+            if (pkg in CHROME_PKGS && hidden.any { e.timeStamp in (it.first - PRIVATE_MARGIN_MS)..(it.last + PRIVATE_MARGIN_MS) }) continue
             out += JSONObject()
                 .put("t", e.timeStamp)
                 .put("kind", "app")

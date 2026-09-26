@@ -58,6 +58,8 @@ class ScreenTextService : AccessibilityService() {
      * Chrome 을 떠났다 돌아와도 같은 탭이 열리므로 떠날 때 지우지 않는다.
      */
     private var chromeIncognito = false
+    /** 직전 판정에서 최근 앱 화면에 Brave 카드가 보였는지. */
+    private var recentsShown = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -66,7 +68,7 @@ class ScreenTextService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         // 판정할 수 없게 되었다. 비공개로 둔 채 남기면 화면 녹화가 영영 멈춘다.
-        PrivateScreen.set(null)
+        PrivateScreen.set(this, null)
         ScreenTextLog.writeServiceEvent(this, "disconnected")
         return super.onUnbind(intent)
     }
@@ -200,7 +202,7 @@ class ScreenTextService : AccessibilityService() {
         // 창 목록으로는 늦게 잡힌다 (실측 2026-09-26: 첫 화면 뒤 0.9초, 그 사이 다섯 프레임이 남았다).
         if (BRAVE_PKGS.any { pkg.startsWith(it) } && PrivateScreen.reason.value == null) {
             Log.i(TAG, "private screen: $BRAVE_REASON (event)")
-            PrivateScreen.set(BRAVE_REASON)
+            PrivateScreen.set(this, BRAVE_REASON)
         }
         val windowChanged = e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
             e.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
@@ -214,8 +216,9 @@ class ScreenTextService : AccessibilityService() {
             }
             return
         }
-        if (pkg !in CHROME_PKGS) return
-        if (e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) noteChromeClick(e)
+        // 최근 앱 화면은 넘기면(스크롤) Brave 카드가 들어오고 나간다. 창은 그대로라 이벤트로 다시 본다.
+        if (pkg !in CHROME_PKGS && !recentsShown) return
+        if (pkg in CHROME_PKGS && e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) noteChromeClick(e)
         if (privatePending) return
         privatePending = true
         handler.postDelayed({ privatePending = false; checkPrivateSafely() }, PRIVATE_DELAY_MS)
@@ -235,6 +238,7 @@ class ScreenTextService : AccessibilityService() {
      */
     private fun checkPrivate() {
         var reason: String? = null
+        recentsShown = false
         // 앱 창인데 아직 내용(root)을 못 읽은 것. 그것이 Brave 일 수 있으니 이때는 풀지 않는다.
         var unknown = false
         for (w in windows) {
@@ -244,9 +248,12 @@ class ScreenTextService : AccessibilityService() {
             if (root == null || pkg == null) { unknown = true; continue }
             if (BRAVE_PKGS.any { pkg.startsWith(it) }) {
                 reason = BRAVE_REASON
+            } else if (hasBraveTaskCard(root)) {
+                recentsShown = true
+                if (reason == null) reason = RECENTS_REASON
             } else if (pkg in CHROME_PKGS) {
                 chromeIncognitoMode(root)?.let { chromeIncognito = it }
-                if (chromeIncognito && reason == null) reason = "Chrome 시크릿 탭"
+                if (chromeIncognito && reason == null) reason = PrivateScreen.CHROME_INCOGNITO
             }
         }
         // 다만 오래 붙들지는 않는다 — root 를 끝내 주지 않는 창이 있으면 녹화가 영영 멈춘다.
@@ -257,7 +264,7 @@ class ScreenTextService : AccessibilityService() {
         }
         if (reason != PrivateScreen.reason.value) {
             Log.i(TAG, "private screen: $reason")
-            PrivateScreen.set(reason)
+            PrivateScreen.set(this, reason)
         }
     }
 
@@ -290,6 +297,30 @@ class ScreenTextService : AccessibilityService() {
             if (desc != null && INCOGNITO_PANE.matches(desc.trim())) return n.isSelected
             for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)?.let { return it }
             return null
+        }
+        return walk(root, 0)
+    }
+
+    /**
+     * 최근 앱 화면에 Brave 카드가 보이는지. 카드에는 앱이 마지막으로 그린 화면이 썸네일로 들어가고,
+     * 그 화면은 Brave 창이 아니라 런처 창이라 위의 Brave 판정에 걸리지 않는다.
+     * (Chrome 시크릿 탭 썸네일은 Chrome 이 FLAG_SECURE 로 가린다.)
+     *
+     * 카드는 뷰 id 에 `task` 가 들어가고 설명이 앱 이름이다 — One UI 는 `taskView` 에
+     * content-desc "Brave" (2026-09-26 실측). 홈 화면 아이콘도 이름이 "Brave" 라서 id 로 가른다.
+     */
+    private fun hasBraveTaskCard(root: AccessibilityNodeInfo): Boolean {
+        var visited = 0
+        fun walk(n: AccessibilityNodeInfo?, depth: Int): Boolean {
+            if (n == null || visited >= MAX_NODES || depth > MAX_DEPTH) return false
+            visited++
+            val vid = n.viewIdResourceName?.substringAfter(":id/")
+            val desc = n.contentDescription?.toString()
+            if (vid != null && vid.contains("task", ignoreCase = true) && desc != null &&
+                desc.startsWith("Brave", ignoreCase = true) && n.isVisibleToUser
+            ) return true
+            for (i in 0 until n.childCount) if (walk(n.getChild(i), depth + 1)) return true
+            return false
         }
         return walk(root, 0)
     }
@@ -352,6 +383,7 @@ class ScreenTextService : AccessibilityService() {
         private const val PRIVATE_RECHECK_MS = 400L
         private const val UNKNOWN_HOLD_MS = 2_000L
         private const val BRAVE_REASON = "Brave 사용 중"
+        private const val RECENTS_REASON = "최근 앱에 Brave"
 
         /** 창이 떠 있기만 하면 화면 녹화·화면 글자를 멈추는 앱. 베타·나이틀리도 같은 접두어다. */
         private val BRAVE_PKGS = listOf("com.brave.browser")

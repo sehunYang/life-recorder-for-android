@@ -19,6 +19,16 @@ object Config {
     const val SCREEN_IFRAME_INTERVAL_SEC = 5
     /** 화면이 멈춰 있어도 이 간격마다 이전 프레임을 반복 인코딩해 타임라인이 끊기지 않게 한다. 길수록 인코더가 덜 깨어난다. */
     const val SCREEN_REPEAT_FRAME_US = 10_000_000L
+    /**
+     * 인코딩된 화면 프레임을 파일에 쓰기 전에 붙드는 시간. 비공개 앱은 창이 뜬 뒤에 판정되므로
+     * 그 사이 프레임을 되돌려 버릴 여유다. 되돌리는 폭([SCREEN_PRIVATE_LOOKBACK_US])보다 길어야 한다.
+     */
+    const val SCREEN_HOLD_US = 1_500_000L
+    /**
+     * 비공개 앱이 판정되면 이만큼 앞선 프레임부터 버린다. 실측(2026-09-26) 판정 지연은 실행 뒤
+     * 0.2초 안쪽이고 여는 애니메이션은 0.3초 남짓이다. 넉넉히 1초.
+     */
+    const val SCREEN_PRIVATE_LOOKBACK_US = 1_000_000L
 
     /** 정각까지 남은 시간이 이보다 짧으면 다음 정각까지 하나의 세그먼트로 합친다. */
     const val MIN_SEGMENT_MS = 5_000L

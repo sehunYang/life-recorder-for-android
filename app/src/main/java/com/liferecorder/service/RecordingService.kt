@@ -191,13 +191,15 @@ class RecordingService : Service() {
 
     /**
      * 화면 꺼짐·비공개 앱(Brave, Chrome 시크릿 탭)을 화면 캡처 입력에 반영한다.
-     * 비공개 앱이 떠 있는 동안은 입력을 끊어 그 화면이 인코더에 아예 들어가지 않게 한다.
-     * 영상에는 그 사이가 직전 화면에 멈춘 채로 남는다.
+     * 비공개 앱은 판정 직전에 찍힌 프레임까지 되돌려 버린다 (`ScreenRecorderSession.setPrivate`).
+     * 영상에는 그 사이가 빠진다 (재생하면 직전 화면에 멈춰 있다).
      */
     private fun applyCaptureGate() {
-        val reason = if (!screenOn) "화면 꺼짐" else PrivateScreen.reason.value
+        val private = PrivateScreen.reason.value
+        val reason = if (!screenOn) "화면 꺼짐" else private
         val s = screen
-        s?.setCaptureEnabled(reason == null)
+        s?.setCaptureEnabled(screenOn)
+        s?.setPrivate(private != null)
         RecorderState.update { it.copy(screenPausedReason = if (s != null) reason else null) }
     }
 
