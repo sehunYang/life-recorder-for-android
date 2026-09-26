@@ -6,11 +6,14 @@ import android.content.Intent
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import com.liferecorder.Prefs
+import com.liferecorder.PrivateScreen
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -21,8 +24,11 @@ import org.json.JSONObject
  * 글자로 주므로 OCR 없이 원문이 남는다. 카카오톡이면 알림에 없는 내 발화·열어 둔 방의 메시지·
  * 그룹방 이름이, 다른 앱이면 문서·게시글·거래 내역이 그대로 온다.
  *
- * 무엇을 버릴지는 여기서 정하지 않는다. 내려받은 쪽이 정한다. 예외는 셋뿐이다 —
- * 비밀번호 입력란(시스템이 가리는 것), 이 앱 자신의 화면, 그리고 **인증 화면 전체**.
+ * 무엇을 버릴지는 여기서 정하지 않는다. 내려받은 쪽이 정한다. 예외는 넷뿐이다 —
+ * 비밀번호 입력란(시스템이 가리는 것), 이 앱 자신의 화면, **인증 화면 전체**, 그리고
+ * **비공개 앱**(Brave, Chrome 시크릿 탭)이 떠 있는 동안의 화면.
+ *
+ * 비공개 앱 판정은 화면 녹화도 쓴다 (`PrivateScreen`). 화면 글자 모으기를 꺼 두어도 판정은 돈다.
  *
  * 인증 화면을 통째로 버리는 이유 (2026-09-19 추가): `isPassword` 는 입력란에만 붙는 표시라서,
  * 금융 앱이 버튼으로 그린 PIN 판은 그 그물을 빠져나간다. 뱅크샐러드 PIN 화면에서 섞인 숫자판
@@ -42,6 +48,16 @@ class ScreenTextService : AccessibilityService() {
     private var lastActivity: String? = null
     private var lastPkg: String? = null
     private var lastTitle: String? = null
+    private var privatePending = false
+    private var windowChangedAt = 0L
+    private val recheckPrivate = Runnable { checkPrivateSafely() }
+    /**
+     * Chrome 이 지금 시크릿 모드인지. 시크릿 **웹 페이지**에는 접근성으로 보이는 표시가 없다
+     * (2026-09-26 실측: 툴바·뷰 트리가 일반 탭과 같다). 그래서 모드가 바뀌는 순간만 보고 기억한다 —
+     * 시크릿 새 탭 화면, 탭 전환기에서 고른 쪽, "새 시크릿 탭"·"시크릿 탭에서 열기" 누름.
+     * Chrome 을 떠났다 돌아와도 같은 탭이 열리므로 떠날 때 지우지 않는다.
+     */
+    private var chromeIncognito = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -49,6 +65,8 @@ class ScreenTextService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        // 판정할 수 없게 되었다. 비공개로 둔 채 남기면 화면 녹화가 영영 멈춘다.
+        PrivateScreen.set(null)
         ScreenTextLog.writeServiceEvent(this, "disconnected")
         return super.onUnbind(intent)
     }
@@ -57,13 +75,16 @@ class ScreenTextService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
+        watchPrivate(event, pkg)
         if (pkg == packageName) return
         if (!Prefs.isIncludeScreenText(this)) return
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             // 대화상자·팝업도 같은 이벤트로 오고 그때 className 은 뷰 클래스다. 액티비티만 기억한다.
             event.className?.toString()?.takeIf { it.endsWith("Activity") }?.let { lastActivity = it }
         }
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) noteScroll(event, pkg)
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && PrivateScreen.reason.value == null) {
+            noteScroll(event, pkg)
+        }
         // 글자 하나 바뀔 때마다 이벤트가 수십 개 몰려온다. 잠깐 모았다가 한 번만 읽는다.
         if (scanPending) return
         scanPending = true
@@ -79,6 +100,7 @@ class ScreenTextService : AccessibilityService() {
     }
 
     private fun scan() {
+        if (PrivateScreen.reason.value != null) return
         val root = rootInActiveWindow ?: return
         val pkg = root.packageName?.toString() ?: return
         if (pkg == packageName) return
@@ -169,6 +191,117 @@ class ScreenTextService : AccessibilityService() {
         )
     }
 
+    /**
+     * 창이 바뀌면 곧바로, 브라우저 안의 변화(탭 전환 등)는 잠깐 모아서 비공개 앱 여부를 다시 본다.
+     * 창 전환을 기다리지 않는 이유 — 그 사이의 프레임이 영상에 남는다.
+     */
+    private fun watchPrivate(e: AccessibilityEvent, pkg: String) {
+        // Brave 가 보낸 이벤트면 창 목록을 기다리지 않고 바로 가린다. 막 뜬 창은 한동안 root 가 없어
+        // 창 목록으로는 늦게 잡힌다 (실측 2026-09-26: 첫 화면 뒤 0.9초, 그 사이 다섯 프레임이 남았다).
+        if (BRAVE_PKGS.any { pkg.startsWith(it) } && PrivateScreen.reason.value == null) {
+            Log.i(TAG, "private screen: $BRAVE_REASON (event)")
+            PrivateScreen.set(BRAVE_REASON)
+        }
+        val windowChanged = e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            e.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        if (windowChanged) {
+            windowChangedAt = SystemClock.uptimeMillis()
+            checkPrivateSafely()
+            // 창이 막 바뀐 때는 root 가 아직 없을 수 있다. 조금 뒤에 한 번 더 본다.
+            if (!privatePending) {
+                privatePending = true
+                handler.postDelayed({ privatePending = false; checkPrivateSafely() }, PRIVATE_RECHECK_MS)
+            }
+            return
+        }
+        if (pkg !in CHROME_PKGS) return
+        if (e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) noteChromeClick(e)
+        if (privatePending) return
+        privatePending = true
+        handler.postDelayed({ privatePending = false; checkPrivateSafely() }, PRIVATE_DELAY_MS)
+    }
+
+    private fun checkPrivateSafely() {
+        try {
+            checkPrivate()
+        } catch (e: Exception) {
+            Log.w(TAG, "private check failed", e)
+        }
+    }
+
+    /**
+     * 화면에 떠 있는 앱 창을 모두 본다 (앞에 있는 창만 보면 알림창·분할 화면 뒤의 브라우저를 놓친다).
+     * Brave 는 창이 있기만 하면, Chrome 은 시크릿 표시가 보일 때 비공개다.
+     */
+    private fun checkPrivate() {
+        var reason: String? = null
+        // 앱 창인데 아직 내용(root)을 못 읽은 것. 그것이 Brave 일 수 있으니 이때는 풀지 않는다.
+        var unknown = false
+        for (w in windows) {
+            if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+            val root = w.root
+            val pkg = root?.packageName?.toString()
+            if (root == null || pkg == null) { unknown = true; continue }
+            if (BRAVE_PKGS.any { pkg.startsWith(it) }) {
+                reason = BRAVE_REASON
+            } else if (pkg in CHROME_PKGS) {
+                chromeIncognitoMode(root)?.let { chromeIncognito = it }
+                if (chromeIncognito && reason == null) reason = "Chrome 시크릿 탭"
+            }
+        }
+        // 다만 오래 붙들지는 않는다 — root 를 끝내 주지 않는 창이 있으면 녹화가 영영 멈춘다.
+        if (reason == null && unknown && SystemClock.uptimeMillis() - windowChangedAt < UNKNOWN_HOLD_MS) {
+            handler.removeCallbacks(recheckPrivate)
+            handler.postDelayed(recheckPrivate, PRIVATE_RECHECK_MS)
+            return
+        }
+        if (reason != PrivateScreen.reason.value) {
+            Log.i(TAG, "private screen: $reason")
+            PrivateScreen.set(reason)
+        }
+    }
+
+    /**
+     * Chrome 창에서 모드를 알려 주는 표시를 찾는다. 시크릿이면 true, 일반이면 false, 표시가 없으면 null.
+     *
+     * - 시크릿 새 탭 화면: 뷰 id `new_tab_incognito_*`
+     * - 일반 새 탭 화면: 시크릿 모드 바로가기 버튼 `incognito_button` (일반 모드에만 있다)
+     * - 탭 전환기: "시크릿 탭" 칸이 선택돼 있으면 시크릿, 다른 칸이 선택돼 있으면 일반
+     *
+     * 낱말("시크릿")만으로 판정하지 않는다 — 일반 새 탭 화면에 "시크릿 모드" 버튼이 있다.
+     * 웹 본문(WebView 아래)은 보지 않는다.
+     */
+    private fun chromeIncognitoMode(root: AccessibilityNodeInfo): Boolean? {
+        var visited = 0
+        fun walk(n: AccessibilityNodeInfo?, depth: Int): Boolean? {
+            if (n == null || visited >= MAX_NODES || depth > MAX_DEPTH) return null
+            visited++
+            if (n.className?.toString() == "android.webkit.WebView") return null
+            // 탭을 옮겨도 이전 화면(예: 시크릿 새 탭)이 보이지 않는 채로 트리에 남는다 (2026-09-26 실측).
+            // 보이지 않는 노드는 표시로 치지 않는다. 자식은 보일 수 있으니 계속 내려간다.
+            if (!n.isVisibleToUser) {
+                for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)?.let { return it }
+                return null
+            }
+            val vid = n.viewIdResourceName?.substringAfter(":id/")
+            if (vid != null && vid.startsWith("new_tab_incognito")) return true
+            if (vid == "incognito_button") return false
+            val desc = n.contentDescription?.toString()
+            if (desc != null && INCOGNITO_PANE.matches(desc.trim())) return n.isSelected
+            for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)?.let { return it }
+            return null
+        }
+        return walk(root, 0)
+    }
+
+    /** "새 시크릿 탭"·"시크릿 탭에서 열기"를 누르면 시크릿으로 들어간다. 그 뒤 화면에는 표시가 없을 수 있다. */
+    private fun noteChromeClick(e: AccessibilityEvent) {
+        val said = (e.text.joinToString(" ") + " " + (e.contentDescription ?: "")).trim()
+        if (INCOGNITO_OPEN.none { said.contains(it, ignoreCase = true) }) return
+        chromeIncognito = true
+        checkPrivateSafely()
+    }
+
     private var lastScrollAt = 0L
     private var lastScrollKey: String? = null
 
@@ -215,6 +348,19 @@ class ScreenTextService : AccessibilityService() {
         private const val TAG = "ScreenText"
         private const val SCAN_DELAY_MS = 700L
         private const val SCROLL_MIN_GAP_MS = 250L
+        private const val PRIVATE_DELAY_MS = 150L
+        private const val PRIVATE_RECHECK_MS = 400L
+        private const val UNKNOWN_HOLD_MS = 2_000L
+        private const val BRAVE_REASON = "Brave 사용 중"
+
+        /** 창이 떠 있기만 하면 화면 녹화·화면 글자를 멈추는 앱. 베타·나이틀리도 같은 접두어다. */
+        private val BRAVE_PKGS = listOf("com.brave.browser")
+        /** 시크릿 탭일 때만 멈추는 Chrome (정식·베타·개발·카나리). */
+        private val CHROME_PKGS = setOf("com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary")
+        /** 탭 전환기의 시크릿 칸 이름. 일반 칸은 "일반 탭 3개" 처럼 오므로 겹치지 않는다. */
+        private val INCOGNITO_PANE = Regex("""시크릿 탭( \d+개)?|(\d+ )?incognito tabs?""", RegexOption.IGNORE_CASE)
+        /** 누르면 시크릿으로 들어가는 메뉴·버튼. */
+        private val INCOGNITO_OPEN = listOf("새 시크릿 탭", "시크릿 탭에서", "new incognito tab", "in incognito")
         private const val RECENT_TTL_MS = 120_000L
         private const val MAX_RECENT = 4000
         private const val MAX_NODES = 600

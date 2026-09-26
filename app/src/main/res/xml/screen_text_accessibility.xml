@@ -15,7 +15,10 @@
 
      flagIncludeNotImportantViews — 하이브리드 앱(인천e음·버거킹·삼성카드 등)은 뷰를 "접근성에
      중요하지 않음"으로 표시해 두어, 이 플래그가 없으면 시스템 uiautomator 에는 보이는 글자가
-     우리에게는 0건이었다 (2026-09-17 147개 앱 순회 실측). -->
+     우리에게는 0건이었다 (2026-09-17 147개 앱 순회 실측).
+
+     notificationTimeout 100 — 이벤트가 이만큼 늦게 온다. 비공개 앱(Brave·Chrome 시크릿) 판정이
+     이 지연만큼 늦어 그 사이 프레임이 화면 녹화에 남는다. 글자 읽기는 어차피 700ms 모아 읽는다. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
@@ -23,4 +26,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/a11y_description"
     android:isAccessibilityTool="true"
-    android:notificationTimeout="300" />
+    android:notificationTimeout="100" />

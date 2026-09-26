@@ -17,10 +17,15 @@ import android.util.Log
 import com.liferecorder.AppScope
 import com.liferecorder.Notifications
 import com.liferecorder.Prefs
+import com.liferecorder.PrivateScreen
 import com.liferecorder.RecorderState
 import com.liferecorder.Storage
 import com.liferecorder.upload.UploadScheduler
 import com.liferecorder.widget.RecordWidget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -42,6 +47,8 @@ class RecordingService : Service() {
     private var fgTypes = 0
 
     private var screenOn = true
+    /** 서비스와 수명을 같이하는 메인 스레드 스코프. 비공개 앱 판정을 받아 캡처 입력에 반영한다. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     /** 자동 재개가 실패해도 잠금 해제마다 다시 달려들지 않도록 최소 간격을 둔다. */
     private var lastResumeAttempt = 0L
 
@@ -72,6 +79,7 @@ class RecordingService : Service() {
             },
             RECEIVER_NOT_EXPORTED,
         )
+        scope.launch { PrivateScreen.reason.collect { applyCaptureGate() } }
         // 죽은 .part 복구는 Application.onCreate에서 한 번만 한다 (여기서 또 하면 같은 파일을 두 번 remux).
         AppScope.launch { RecorderState.refreshPending(this@RecordingService) }
     }
@@ -181,9 +189,13 @@ class RecordingService : Service() {
         }
     }
 
-    /** 화면 꺼짐 상태를 화면 캡처 입력에 반영한다. */
+    /**
+     * 화면 꺼짐·비공개 앱(Brave, Chrome 시크릿 탭)을 화면 캡처 입력에 반영한다.
+     * 비공개 앱이 떠 있는 동안은 입력을 끊어 그 화면이 인코더에 아예 들어가지 않게 한다.
+     * 영상에는 그 사이가 직전 화면에 멈춘 채로 남는다.
+     */
     private fun applyCaptureGate() {
-        val reason = if (!screenOn) "화면 꺼짐" else null
+        val reason = if (!screenOn) "화면 꺼짐" else PrivateScreen.reason.value
         val s = screen
         s?.setCaptureEnabled(reason == null)
         RecorderState.update { it.copy(screenPausedReason = if (s != null) reason else null) }
@@ -252,6 +264,7 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         audio?.stop()
         audio = null
