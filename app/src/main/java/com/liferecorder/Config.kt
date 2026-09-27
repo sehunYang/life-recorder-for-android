@@ -2,12 +2,19 @@ package com.liferecorder
 
 /** 녹음/녹화/업로드 품질과 동작을 결정하는 상수. 필요하면 여기만 바꾸면 된다. */
 object Config {
-    // 마이크 녹음: AAC-LC, 48kHz 모노 160kbps (음성 식별에 충분한 품질)
-    /** STT 목적이라 VOICE_RECOGNITION(음성 인식용 튜닝). 삼성 자체 처리가 거슬리면 MIC나 UNPROCESSED로 바꿔 비교. */
-    const val AUDIO_SOURCE = android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION
+    // 마이크 녹음: AAC-LC, 48kHz 스테레오 256kbps
+    /**
+     * CAMCORDER — 삼성은 이 경로에 잡음 제거·음량 조절을 걸고 마이크 두 개를 따로 준다.
+     * 실측(2026-09-27, Flip 5, 문밖→방 안 약 3m, 선풍기·공기청정기): 말소리 대 잡음이
+     * VOICE_RECOGNITION 17.1dB · MIC 36.1dB · CAMCORDER 37.6dB · 삼성 녹음 앱 31.7dB.
+     * VOICE_RECOGNITION 은 사실상 무처리 원음에 음량만 올린 것이라 선풍기 소리까지 같이 커졌다.
+     * 두 채널은 서로 다른 마이크다 (상관 0.39). 하나가 막혀도 다른 쪽이 남는다.
+     */
+    const val AUDIO_SOURCE = android.media.MediaRecorder.AudioSource.CAMCORDER
     const val AUDIO_SAMPLE_RATE = 48_000
-    const val AUDIO_BITRATE = 160_000
-    const val AUDIO_CHANNELS = 1
+    /** 스테레오라 채널당 128kbps. 시간당 약 115MB (모노 160kbps 때 약 72MB). */
+    const val AUDIO_BITRATE = 256_000
+    const val AUDIO_CHANNELS = 2
 
     // 화면 녹화: 해상도 1/2 축소(약 540px 폭), 최대 5fps, 0.8Mbps 상한.
     // 앱 UI 글씨(상품명·가격·메뉴)는 비전 모델이 읽는 수준 (실측). 발열 때문에 0.67에서 내렸다:
