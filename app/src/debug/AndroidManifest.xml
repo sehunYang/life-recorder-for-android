@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 디버그 빌드에만 들어가는 실험 화면. adb 로 띄운다 (릴리스에는 없다). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".debug.AudioTestActivity"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".debug.AacBenchActivity"
+            android:exported="true" />
+    </application>
+</manifest>
