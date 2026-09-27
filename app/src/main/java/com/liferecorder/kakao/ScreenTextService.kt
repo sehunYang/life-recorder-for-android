@@ -58,8 +58,6 @@ class ScreenTextService : AccessibilityService() {
      * Chrome 을 떠났다 돌아와도 같은 탭이 열리므로 떠날 때 지우지 않는다.
      */
     private var chromeIncognito = false
-    /** 직전 판정에서 최근 앱 화면에 Brave 카드가 보였는지. */
-    private var recentsShown = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -216,12 +214,33 @@ class ScreenTextService : AccessibilityService() {
             }
             return
         }
-        // 최근 앱 화면은 넘기면(스크롤) Brave 카드가 들어오고 나간다. 창은 그대로라 이벤트로 다시 본다.
-        if (pkg !in CHROME_PKGS && !recentsShown) return
-        if (pkg in CHROME_PKGS && e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) noteChromeClick(e)
-        if (privatePending) return
-        privatePending = true
-        handler.postDelayed({ privatePending = false; checkPrivateSafely() }, PRIVATE_DELAY_MS)
+        // 창이 그대로인 채 바뀌는 것은 두 가지만 다시 본다. 나머지 이벤트(스크롤·글자 변경 등)마다
+        // 트리를 훑으면 Chrome 을 스크롤하는 내내 초당 여러 번 훑게 된다.
+        when {
+            // Chrome 의 모드는 누를 때 바뀐다 (새 시크릿 탭, 탭 전환기의 칸, 탭 고르기).
+            // 누른 뒤 화면이 바뀌기까지 시간이 걸리므로 조금 뒤에 두 번 본다.
+            pkg in CHROME_PKGS && e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                noteChromeClick(e)
+                handler.removeCallbacks(recheckPrivate)
+                handler.postDelayed(recheckPrivate, CLICK_RECHECK_MS)
+                handler.postDelayed({ checkPrivateSafely() }, CLICK_RECHECK_LATE_MS)
+            }
+            // 최근 앱 화면은 넘기면 Brave 카드가 들어오고 나간다. 창은 그대로다.
+            pkg == homePackage() && e.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                if (privatePending) return
+                privatePending = true
+                handler.postDelayed({ privatePending = false; checkPrivateSafely() }, PRIVATE_DELAY_MS)
+            }
+        }
+    }
+
+    private var homePkg: String? = null
+
+    /** 기본 런처. 최근 앱 화면은 런처가 그린다 (One UI · Pixel 모두). */
+    private fun homePackage(): String? {
+        homePkg?.let { return it }
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName?.also { homePkg = it }
     }
 
     private fun checkPrivateSafely() {
@@ -238,7 +257,6 @@ class ScreenTextService : AccessibilityService() {
      */
     private fun checkPrivate() {
         var reason: String? = null
-        recentsShown = false
         // 앱 창인데 아직 내용(root)을 못 읽은 것. 그것이 Brave 일 수 있으니 이때는 풀지 않는다.
         var unknown = false
         for (w in windows) {
@@ -248,8 +266,7 @@ class ScreenTextService : AccessibilityService() {
             if (root == null || pkg == null) { unknown = true; continue }
             if (BRAVE_PKGS.any { pkg.startsWith(it) }) {
                 reason = BRAVE_REASON
-            } else if (hasBraveTaskCard(root)) {
-                recentsShown = true
+            } else if (pkg == homePackage() && hasBraveTaskCard(root)) {
                 if (reason == null) reason = RECENTS_REASON
             } else if (pkg in CHROME_PKGS) {
                 chromeIncognitoMode(root)?.let { chromeIncognito = it }
@@ -309,21 +326,14 @@ class ScreenTextService : AccessibilityService() {
      * 카드는 뷰 id 에 `task` 가 들어가고 설명이 앱 이름이다 — One UI 는 `taskView` 에
      * content-desc "Brave" (2026-09-26 실측). 홈 화면 아이콘도 이름이 "Brave" 라서 id 로 가른다.
      */
-    private fun hasBraveTaskCard(root: AccessibilityNodeInfo): Boolean {
-        var visited = 0
-        fun walk(n: AccessibilityNodeInfo?, depth: Int): Boolean {
-            if (n == null || visited >= MAX_NODES || depth > MAX_DEPTH) return false
-            visited++
+    private fun hasBraveTaskCard(root: AccessibilityNodeInfo): Boolean =
+        // 트리를 한 노드씩 받아 오지 않고 런처 쪽에서 한 번에 찾게 한다 (글·설명 모두에서 찾는다).
+        root.findAccessibilityNodeInfosByText("Brave").any { n ->
             val vid = n.viewIdResourceName?.substringAfter(":id/")
             val desc = n.contentDescription?.toString()
-            if (vid != null && vid.contains("task", ignoreCase = true) && desc != null &&
+            vid != null && vid.contains("task", ignoreCase = true) && desc != null &&
                 desc.startsWith("Brave", ignoreCase = true) && n.isVisibleToUser
-            ) return true
-            for (i in 0 until n.childCount) if (walk(n.getChild(i), depth + 1)) return true
-            return false
         }
-        return walk(root, 0)
-    }
 
     /** "새 시크릿 탭"·"시크릿 탭에서 열기"를 누르면 시크릿으로 들어간다. 그 뒤 화면에는 표시가 없을 수 있다. */
     private fun noteChromeClick(e: AccessibilityEvent) {
@@ -381,6 +391,8 @@ class ScreenTextService : AccessibilityService() {
         private const val SCROLL_MIN_GAP_MS = 250L
         private const val PRIVATE_DELAY_MS = 150L
         private const val PRIVATE_RECHECK_MS = 400L
+        private const val CLICK_RECHECK_MS = 300L
+        private const val CLICK_RECHECK_LATE_MS = 1_000L
         private const val UNKNOWN_HOLD_MS = 2_000L
         private const val BRAVE_REASON = "Brave 사용 중"
         private const val RECENTS_REASON = "최근 앱에 Brave"
