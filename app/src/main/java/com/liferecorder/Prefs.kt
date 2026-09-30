@@ -45,9 +45,8 @@ object Prefs {
     fun isIncludeSms(ctx: Context) = sp(ctx).getBoolean("include_sms", true)
     fun setIncludeSms(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_sms", v).apply()
 
-    /** 마지막으로 내보낸 날짜 (yyyy-MM-dd). 이 다음 날부터 어제까지를 내보낸다. */
+    /** 마지막으로 내보낸 날짜 (yyyy-MM-dd). v0.7 까지. v0.8 은 [smsExportedUntil] 로 옮겨 간다. */
     fun smsLastExportDay(ctx: Context): String? = sp(ctx).getString("sms_last_day", null)
-    fun setSmsLastExportDay(ctx: Context, day: String) = sp(ctx).edit().putString("sms_last_day", day).apply()
 
     /** 카카오톡 알림을 기록해 하루치 JSONL로 올릴지. */
     fun isIncludeKakao(ctx: Context) = sp(ctx).getBoolean("include_kakao", true)
@@ -61,9 +60,17 @@ object Prefs {
     fun isIncludeApp(ctx: Context) = sp(ctx).getBoolean("include_app", true)
     fun setIncludeApp(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("include_app", v).apply()
 
-    /** 마지막으로 내보낸 앱 사용 기록 날짜 (yyyy-MM-dd). */
+    /** 마지막으로 내보낸 앱 사용 기록 날짜 (yyyy-MM-dd). v0.7 까지. v0.8 은 [appExportedUntil] 로 옮겨 간다. */
     fun appLastExportDay(ctx: Context): String? = sp(ctx).getString("app_last_day", null)
-    fun setAppLastExportDay(ctx: Context, day: String) = sp(ctx).edit().putString("app_last_day", day).apply()
+
+    /**
+     * 내보내기를 이 시각(ms, 정각)까지 마쳤다. 다음은 여기서부터. 없으면 null — v0.7 의 날짜에서 이어받는다.
+     * 앱 사용·문자가 한 시간 조각으로 나가게 되면서(v0.8, `HourSlice`) 날짜 대신 시각을 기억한다.
+     */
+    fun appExportedUntil(ctx: Context): Long? = sp(ctx).getLong("app_exported_until", -1L).takeIf { it > 0 }
+    fun setAppExportedUntil(ctx: Context, ms: Long) = sp(ctx).edit().putLong("app_exported_until", ms).apply()
+    fun smsExportedUntil(ctx: Context): Long? = sp(ctx).getLong("sms_exported_until", -1L).takeIf { it > 0 }
+    fun setSmsExportedUntil(ctx: Context, ms: Long) = sp(ctx).edit().putLong("sms_exported_until", ms).apply()
 
     /** 진단용. 카카오톡 알림 원본을 통째로 별도 파일에 덤프한다. 용량이 크니 평소엔 끈다. */
     fun isKakaoDump(ctx: Context) = sp(ctx).getBoolean("kakao_dump", false)

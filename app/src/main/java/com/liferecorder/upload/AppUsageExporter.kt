@@ -7,18 +7,17 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
 import com.liferecorder.Config
+import com.liferecorder.HourSlice
 import com.liferecorder.Prefs
 import com.liferecorder.PrivateScreen
 import com.liferecorder.Storage
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 /**
- * 어느 앱이 앞에 떠 있었는지를 하루 단위 JSONL로 그대로 내보낸다. 해석하지 않는다.
+ * 어느 앱이 앞에 떠 있었는지를 JSONL로 그대로 내보낸다 — 오늘치는 한 시간 조각, 소급분은 하루 단위. 해석하지 않는다.
  *
  *   app/app_yyyy-MM-dd.jsonl
  *   {"t":1788500640000,"kind":"app","event":"resumed","pkg":"com.kakao.talk",
@@ -61,28 +60,32 @@ object AppUsageExporter {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    /** 새로 쓴 날짜 파일 수. 오늘은 아직 안 끝났으므로 어제까지만 만든다. */
+    /**
+     * 새로 쓴 파일 수. 끝난 구간만 만든다 — 소급하는 지난 날은 하루 파일, 오늘은 한 시간 조각
+     * (`app_2026-09-30_h13.jsonl`, v0.8~ [HourSlice]). 사건이 없는 구간은 파일 없이 넘어간다.
+     */
     fun exportPending(ctx: Context): Int {
         if (!hasPermission(ctx)) return 0
         val usm = ctx.getSystemService(UsageStatsManager::class.java)
         val pm = ctx.packageManager
         val labels = HashMap<String, String?>()
-        val today = startOfDay(System.currentTimeMillis())
-        val last = Prefs.appLastExportDay(ctx)?.let { runCatching { dayFormat.parse(it)?.time }.getOrNull() }
-        var day = if (last != null) addDays(last, 1) else addDays(today, -Config.APP_USAGE_BACKFILL_DAYS)
+        val now = System.currentTimeMillis()
+        val from = Prefs.appExportedUntil(ctx)
+            // v0.7 에서 올라온 기기: 마지막으로 내보낸 날의 다음 날 자정부터
+            ?: Prefs.appLastExportDay(ctx)?.let { runCatching { dayFormat.parse(it)?.time }.getOrNull() }
+                ?.let { HourSlice.addDays(it, 1) }
+            ?: HourSlice.addDays(HourSlice.dayStart(now), -Config.APP_USAGE_BACKFILL_DAYS)
         var count = 0
         val hidden = PrivateScreen.intervals(ctx, PrivateScreen.CHROME_INCOGNITO)
-        while (day < today) {
-            val end = addDays(day, 1)
-            val lines = readDay(usm, pm, labels, hidden, day, end)
+        for (w in HourSlice.windows(from, HourSlice.exportableUntil(now))) {
+            val lines = readDay(usm, pm, labels, hidden, w.start, w.end)
             if (lines.isNotEmpty()) {
-                val part = File(Storage.appDir(ctx), "app_${dayFormat.format(Date(day))}.jsonl${Storage.PART}")
+                val part = File(Storage.appDir(ctx), "app_${w.key}.jsonl${Storage.PART}")
                 part.writeText(lines.joinToString("\n") + "\n", Charsets.UTF_8)
                 Storage.finishPart(part)
                 count++
             }
-            Prefs.setAppLastExportDay(ctx, dayFormat.format(Date(day)))
-            day = end
+            Prefs.setAppExportedUntil(ctx, w.end)
         }
         return count
     }
@@ -124,15 +127,4 @@ object AppUsageExporter {
                 null
             }
         }
-
-    private fun startOfDay(ms: Long): Long = Calendar.getInstance().apply {
-        timeInMillis = ms
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-    private fun addDays(ms: Long, days: Int): Long = Calendar.getInstance().apply {
-        timeInMillis = ms
-        add(Calendar.DAY_OF_MONTH, days)
-    }.timeInMillis
 }

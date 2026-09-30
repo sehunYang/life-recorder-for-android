@@ -2,6 +2,7 @@ package com.liferecorder.kakao
 
 import android.content.Context
 import android.util.Log
+import com.liferecorder.HourSlice
 import com.liferecorder.Storage
 import org.json.JSONObject
 import java.io.File
@@ -10,10 +11,11 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 접근성 서비스가 화면에서 읽은 글자를 하루 단위 JSONL로 그대로 쌓는다.
+ * 접근성 서비스가 화면에서 읽은 글자를 한 시간 단위 JSONL로 그대로 쌓는다 (v0.7 까지는 하루 단위).
  *
- *   screentext/rawscreentext_yyyy-MM-dd.jsonl.part   ← 오늘치, 계속 이어 쓰는 중 (업로드 대상 아님)
- *   screentext/screentext_yyyy-MM-dd.jsonl           ← 날이 바뀌어 확정된 것, 업로드 대상
+ *   screentext/rawscreentext_yyyy-MM-dd_hHH.jsonl.part ← 지금 시간치, 계속 이어 쓰는 중 (업로드 대상 아님)
+ *   screentext/screentext_yyyy-MM-dd_hHH.jsonl         ← 그 시간이 끝나 확정된 것, 업로드 대상 (v0.8~, [HourSlice])
+ *   screentext/screentext_yyyy-MM-dd.jsonl             ← v0.7 까지의 하루치. 올리기 전에 남아 있던 것만 이 이름으로 나간다
  *
  * 한 줄에 레코드 하나. `kind`로 종류를 구분한다.
  *  - screen  : 화면을 한 번 읽은 결과. 새로 나타난 글자 노드만 담는다
@@ -29,8 +31,8 @@ object ScreenTextLog {
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val lock = Any()
 
-    private fun rawFile(ctx: Context, dayMs: Long): File =
-        File(Storage.screenTextDir(ctx), "$RAW_PREFIX${dayFormat.format(Date(dayMs))}$EXT${Storage.PART}")
+    private fun rawFile(ctx: Context, timeMs: Long): File =
+        File(Storage.screenTextDir(ctx), "$RAW_PREFIX${HourSlice.key(timeMs)}$EXT${Storage.PART}")
 
     fun write(ctx: Context, timeMs: Long, record: JSONObject) {
         synchronized(lock) {
@@ -47,15 +49,21 @@ object ScreenTextLog {
         write(ctx, now, JSONObject().put("kind", "service").put("event", event).put("t", now))
     }
 
-    /** 날이 지난 로그를 업로드 대상으로 확정한다. 내용은 손대지 않고 이름만 바꾼다. */
-    fun finalizeCompletedDays(ctx: Context): Int = synchronized(lock) {
+    /** 끝난 시간(v0.7 까지 만든 파일은 끝난 날)의 로그를 업로드 대상으로 확정한다. 내용은 손대지 않고 이름만 바꾼다. */
+    fun finalizeCompleted(ctx: Context): Int = synchronized(lock) {
         val today = dayFormat.format(Date())
+        val closedBefore = HourSlice.closedBefore()
         var count = 0
         val files = Storage.screenTextDir(ctx).listFiles().orEmpty()
             .filter { it.isFile && it.name.startsWith(RAW_PREFIX) && it.name.endsWith("$EXT${Storage.PART}") }
         for (f in files) {
             val day = f.name.removePrefix(RAW_PREFIX).removeSuffix("$EXT${Storage.PART}")
-            if (day.length != 10 || day >= today) continue
+            val closed = when (day.length) {
+                10 -> day < today                // 하루치 (v0.7 까지)
+                14 -> day < closedBefore         // 한 시간치 2026-09-30_h13
+                else -> false
+            }
+            if (!closed) continue
             if (f.length() == 0L) { f.delete(); continue }
 
             val done = File(f.parentFile, "$DONE_PREFIX$day$EXT")

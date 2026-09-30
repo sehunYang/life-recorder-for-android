@@ -2,6 +2,7 @@ package com.liferecorder.kakao
 
 import android.content.Context
 import android.util.Log
+import com.liferecorder.HourSlice
 import com.liferecorder.Storage
 import org.json.JSONObject
 import java.io.File
@@ -10,10 +11,11 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 카카오톡 알림에서 나온 것을 하루 단위 JSONL로 그대로 쌓는다. 해석하거나 합치지 않는다.
+ * 카카오톡 알림에서 나온 것을 한 시간 단위 JSONL로 그대로 쌓는다 (v0.7 까지는 하루 단위). 해석하거나 합치지 않는다.
  *
- *   kakao/rawkakao_yyyy-MM-dd.jsonl.part   ← 오늘치, 계속 이어 쓰는 중 (업로드 대상 아님)
- *   kakao/kakao_yyyy-MM-dd.jsonl           ← 날이 바뀌어 확정된 것, 업로드 대상
+ *   kakao/rawkakao_yyyy-MM-dd_hHH.jsonl.part ← 지금 시간치, 계속 이어 쓰는 중 (업로드 대상 아님)
+ *   kakao/kakao_yyyy-MM-dd_hHH.jsonl         ← 그 시간이 끝나 확정된 것, 업로드 대상 (v0.8~, [HourSlice])
+ *   kakao/kakao_yyyy-MM-dd.jsonl             ← v0.7 까지의 하루치. 올리기 전에 남아 있던 것만 이 이름으로 나간다
  *   kakao/kakao_dump_yyyy-MM-dd.jsonl      ← 진단 덤프를 켰을 때만. 알림 원본 통째로
  *
  * 한 줄에 레코드 하나. `kind`로 종류를 구분한다.
@@ -47,8 +49,8 @@ object KakaoLog {
         return true
     }
 
-    private fun rawFile(ctx: Context, dayMs: Long): File =
-        File(Storage.kakaoDir(ctx), "$RAW_PREFIX${dayFormat.format(Date(dayMs))}$EXT${Storage.PART}")
+    private fun rawFile(ctx: Context, timeMs: Long): File =
+        File(Storage.kakaoDir(ctx), "$RAW_PREFIX${HourSlice.key(timeMs)}$EXT${Storage.PART}")
 
     /**
      * 레코드 한 줄을 그날 파일에 덧붙인다.
@@ -88,12 +90,13 @@ object KakaoLog {
     }
 
     /**
-     * 날이 지난 로그를 업로드 대상으로 확정한다. 내용은 손대지 않고 이름만 바꾼다.
-     * 진단 덤프 파일도 같이 확정한다.
+     * 끝난 시간(v0.7 까지 만든 파일은 끝난 날)의 로그를 업로드 대상으로 확정한다.
+     * 내용은 손대지 않고 이름만 바꾼다. 진단 덤프 파일은 하루 단위 그대로 확정한다.
      * @return 확정한 파일 수
      */
-    fun finalizeCompletedDays(ctx: Context): Int = synchronized(lock) {
+    fun finalizeCompleted(ctx: Context): Int = synchronized(lock) {
         val today = dayFormat.format(Date())
+        val closedBefore = HourSlice.closedBefore()
         var count = 0
         val files = Storage.kakaoDir(ctx).listFiles().orEmpty()
             .filter { it.isFile && it.name.endsWith("$EXT${Storage.PART}") }
@@ -103,7 +106,12 @@ object KakaoLog {
             if (!isDump && !isRaw) continue
             val prefix = if (isDump) DUMP_PREFIX else RAW_PREFIX
             val day = f.name.removePrefix(prefix).removeSuffix("$EXT${Storage.PART}")
-            if (day.length != 10 || day >= today) continue
+            val closed = when (day.length) {
+                10 -> day < today                        // 하루치 (덤프 · v0.7 까지)
+                14 -> !isDump && day < closedBefore      // 한 시간치 2026-09-30_h13
+                else -> false
+            }
+            if (!closed) continue
             if (f.length() == 0L) { f.delete(); continue }
 
             val doneName = if (isDump) "$DUMP_PREFIX$day$EXT" else "$DONE_PREFIX$day$EXT"

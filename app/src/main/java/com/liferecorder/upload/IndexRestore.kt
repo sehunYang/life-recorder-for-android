@@ -2,8 +2,11 @@ package com.liferecorder.upload
 
 import android.content.Context
 import android.util.Log
+import com.liferecorder.HourSlice
 import com.liferecorder.Prefs
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 /**
  * Drive에 쌓인 수집 기록(`index/index_*.jsonl`)을 읽어 "이미 올린 것" 목록을 되살린다.
@@ -28,7 +31,9 @@ object IndexRestore {
             // 기존 설정이 남아 있으면 그대로 두고 그 위에 합친다 (앱을 지우지 않은 경우).
             val calls = HashSet(Prefs.importedCallIds(ctx))
             val cameras = HashSet(Prefs.importedCameraIds(ctx))
-            var smsDay = Prefs.smsLastExportDay(ctx)
+            // 문자는 올라간 파일 이름이 곧 진행 지점이다. 하루 파일이면 그 다음 날 자정, 한 시간 조각이면 다음 정각.
+            var smsUntil = Prefs.smsExportedUntil(ctx)
+                ?: Prefs.smsLastExportDay(ctx)?.let { sliceEnd(it) }
             var lines = 0
 
             for (entry in client.listFiles(indexFolderId)) {
@@ -45,20 +50,19 @@ object IndexRestore {
                             src.startsWith("camera:") -> cameras += src.removePrefix("camera:")
                         }
                     }
-                    // 문자는 하루치 파일 이름이 곧 진행 지점이다.
                     val name = o.optString("name")
                     if (name.startsWith("sms_") && name.endsWith(".jsonl")) {
-                        val day = name.removePrefix("sms_").removeSuffix(".jsonl")
-                        if (day.length == 10 && (smsDay == null || day > smsDay!!)) smsDay = day
+                        val end = sliceEnd(name.removePrefix("sms_").removeSuffix(".jsonl"))
+                        if (end != null && (smsUntil == null || end > smsUntil!!)) smsUntil = end
                     }
                 }
             }
 
             Prefs.setImportedCallIds(ctx, calls)
             Prefs.setImportedCameraIds(ctx, cameras)
-            smsDay?.let { Prefs.setSmsLastExportDay(ctx, it) }
+            smsUntil?.let { Prefs.setSmsExportedUntil(ctx, it) }
             Prefs.setIndexRestored(ctx, true)
-            Log.i(TAG, "restored from $lines lines: call=${calls.size} camera=${cameras.size} smsLastDay=$smsDay")
+            Log.i(TAG, "restored from $lines lines: call=${calls.size} camera=${cameras.size} smsUntil=$smsUntil")
             true
         } catch (e: Exception) {
             // 여기서 실패하면 수집기를 건너뛴다. 다음 실행에서 다시 시도한다.
@@ -66,4 +70,13 @@ object IndexRestore {
             false
         }
     }
+
+    /** `2026-09-29`(하루) → 다음 날 자정, `2026-09-30_h13`(한 시간) → 14:00. 다른 이름이면 null. */
+    private fun sliceEnd(key: String): Long? = runCatching {
+        when (key.length) {
+            10 -> HourSlice.addDays(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(key)!!.time, 1)
+            14 -> SimpleDateFormat("yyyy-MM-dd'_h'HH", Locale.US).parse(key)!!.time + 3_600_000L
+            else -> null
+        }
+    }.getOrNull()
 }

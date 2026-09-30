@@ -8,18 +8,17 @@ import android.provider.ContactsContract
 import android.provider.Telephony
 import android.util.Log
 import com.liferecorder.Config
+import com.liferecorder.HourSlice
 import com.liferecorder.Prefs
 import com.liferecorder.Storage
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 /**
- * 문자 메시지(SMS + MMS)를 하루 단위 JSONL로 그대로 내보낸다.
+ * 문자 메시지(SMS + MMS)를 JSONL로 그대로 내보낸다 — 오늘치는 한 시간 조각, 소급분은 하루 단위.
  * 한 줄에 메시지 하나. 해석하거나 묶지 않는다. 그건 내려받은 뒤에 할 일이다.
  *
  *   sms/sms_yyyy-MM-dd.jsonl
@@ -40,26 +39,30 @@ object SmsExporter {
     private fun hasContacts(ctx: Context) =
         ctx.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
-    /** 새로 쓴 날짜 파일 수. 오늘은 아직 안 끝났으므로 어제까지만 만든다. */
+    /**
+     * 새로 쓴 파일 수. 끝난 구간만 만든다 — 소급하는 지난 날은 하루 파일, 오늘은 한 시간 조각
+     * (`sms_2026-09-30_h13.jsonl`, v0.8~ [HourSlice]). 문자가 없는 구간은 파일 없이 넘어간다.
+     */
     fun exportPending(ctx: Context): Int {
         if (!hasPermission(ctx)) return 0
-        val today = startOfDay(System.currentTimeMillis())
-        val last = Prefs.smsLastExportDay(ctx)?.let { runCatching { dayFormat.parse(it)?.time }.getOrNull() }
-        var day = if (last != null) addDays(last, 1) else addDays(today, -Config.SMS_BACKFILL_DAYS)
+        val now = System.currentTimeMillis()
+        val from = Prefs.smsExportedUntil(ctx)
+            // v0.7 에서 올라온 기기: 마지막으로 내보낸 날의 다음 날 자정부터
+            ?: Prefs.smsLastExportDay(ctx)?.let { runCatching { dayFormat.parse(it)?.time }.getOrNull() }
+                ?.let { HourSlice.addDays(it, 1) }
+            ?: HourSlice.addDays(HourSlice.dayStart(now), -Config.SMS_BACKFILL_DAYS)
         var count = 0
         val names = HashMap<String, String?>()
-        while (day < today) {
-            val end = addDays(day, 1)
-            val rows = (readSms(ctx, day, end, names) + readMms(ctx, day, end, names))
+        for (w in HourSlice.windows(from, HourSlice.exportableUntil(now))) {
+            val rows = (readSms(ctx, w.start, w.end, names) + readMms(ctx, w.start, w.end, names))
                 .sortedBy { it.first }
             if (rows.isNotEmpty()) {
-                val part = File(Storage.smsDir(ctx), "sms_${dayFormat.format(Date(day))}.jsonl${Storage.PART}")
+                val part = File(Storage.smsDir(ctx), "sms_${w.key}.jsonl${Storage.PART}")
                 part.writeText(rows.joinToString("\n") { it.second.toString() } + "\n", Charsets.UTF_8)
                 Storage.finishPart(part)
                 count++
             }
-            Prefs.setSmsLastExportDay(ctx, dayFormat.format(Date(day)))
-            day = end
+            Prefs.setSmsExportedUntil(ctx, w.end)
         }
         return count
     }
@@ -201,15 +204,4 @@ object SmsExporter {
             null
         }
     }
-
-    private fun startOfDay(ms: Long): Long = Calendar.getInstance().apply {
-        timeInMillis = ms
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-    private fun addDays(ms: Long, days: Int): Long = Calendar.getInstance().apply {
-        timeInMillis = ms
-        add(Calendar.DAY_OF_MONTH, days)
-    }.timeInMillis
 }

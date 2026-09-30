@@ -257,6 +257,8 @@ class RecordingService : Service() {
                 Storage.finalizeAudioPart(part)
                 RecorderState.refreshPending(this@RecordingService)
                 UploadScheduler.enqueueNow(this@RecordingService)
+                // 정각에 닫힌 세그먼트면 글자 자료의 지난 한 시간이 몇 분 뒤 닫힌다 — 그때 한 번 더
+                UploadScheduler.enqueueTail(this@RecordingService)
             }
         }
 

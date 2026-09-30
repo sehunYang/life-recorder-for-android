@@ -178,7 +178,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     /** 날이 지난 화면 글자 로그를 업로드 대상으로 확정한다. */
     private fun finalizeScreenText(ctx: Context) {
         try {
-            ScreenTextLog.finalizeCompletedDays(ctx)
+            ScreenTextLog.finalizeCompleted(ctx)
         } catch (e: Exception) {
             Log.w(TAG, "screen text finalize failed", e)
         }
@@ -195,7 +195,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             return
         }
         try {
-            val n = KakaoLog.finalizeCompletedDays(ctx)
+            val n = KakaoLog.finalizeCompleted(ctx)
             RecorderState.update { it.copy(kakaoNote = if (n > 0) "${n}일치 확정" else "새 날짜 없음") }
         } catch (e: Exception) {
             Log.w(TAG, "kakao finalize failed", e)
