@@ -1,5 +1,6 @@
 package com.liferecorder.service
 
+import android.app.AlarmManager
 import android.app.KeyguardManager
 import android.app.Service
 import android.content.BroadcastReceiver
@@ -34,7 +35,8 @@ import java.io.File
  * 사용자가 앱에서 OFF를 누르기 전까지 살아 있어야 한다 (START_STICKY).
  *
  * 전력 절약: WakeLock은 잡지 않는다. 마이크 녹음 경로가 어차피 CPU를 주기적으로 깨우고,
- * 그 사이에는 시스템이 더 깊은 절전으로 들어갈 수 있게 둔다.
+ * 그 사이에는 시스템이 더 깊은 절전으로 들어갈 수 있게 둔다. 예외 하나 — 알람 때문에 마이크를 놓은 뒤
+ * 다시 잡을 때만 몇 초 깨운다 ([AlarmGuard]. 마이크를 놓으면 녹음 스레드를 깨울 것이 없다).
  * 화면이 꺼지면 화면 캡처 입력만 끊어 GPU 합성/인코딩을 멈춘다.
  * (발열로 끊는 기능은 있었다가 뺐다. 무거운 앱에 들어갈 때마다 화면 기록이 멈춰 공백이 생겼다.)
  */
@@ -52,15 +54,31 @@ class RecordingService : Service() {
     /** 자동 재개가 실패해도 잠금 해제마다 다시 달려들지 않도록 최소 간격을 둔다. */
     private var lastResumeAttempt = 0L
 
+    /** 알람이 울리는 동안 마이크를 놓아 준다 (녹음 중이면 알람 소리가 안 난다). */
+    private lateinit var alarmGuard: AlarmGuard
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> screenOn = false
+                Intent.ACTION_SCREEN_OFF -> { screenOn = false; alarmSignal() }
                 Intent.ACTION_SCREEN_ON -> { screenOn = true; maybeResumeScreen() }
-                Intent.ACTION_USER_PRESENT -> { screenOn = true; maybeResumeScreen() }
+                Intent.ACTION_USER_PRESENT -> { screenOn = true; alarmSignal(); maybeResumeScreen() }
+                AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED -> { alarmGuard.refresh(); return }
                 else -> return
             }
             applyCaptureGate()
+        }
+    }
+
+    /** 화면 꺼짐 · 잠금 해제 — 알람이 끝났으면 녹음 스레드가 마이크를 다시 잡도록 잠깐 깨운다. */
+    private fun alarmSignal() {
+        if (!alarmGuard.onUserSignal()) return
+        try {
+            getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "liferecorder:alarm-resume")
+                .acquire(RESUME_WAKE_MS)
+        } catch (e: Exception) {
+            Log.w(TAG, "wake lock failed: ${e.message}")
         }
     }
 
@@ -70,12 +88,14 @@ class RecordingService : Service() {
         super.onCreate()
         val pm = getSystemService(PowerManager::class.java)
         screenOn = pm.isInteractive
+        alarmGuard = AlarmGuard(this).also { it.refresh() }
         registerReceiver(
             screenReceiver,
             IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_ON)
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_USER_PRESENT)
+                addAction(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
             },
             RECEIVER_NOT_EXPORTED,
         )
@@ -138,7 +158,7 @@ class RecordingService : Service() {
         RecorderState.update { it.copy(recordingEnabled = true) }
         Notifications.cancel(this, Notifications.ID_RESUME)
         if (audio == null) {
-            audio = AudioRecorderSession(this, audioListener).also { it.start() }
+            audio = AudioRecorderSession(this, audioListener, alarmGuard::shouldHold).also { it.start() }
         }
         updateNotification()
     }
@@ -213,7 +233,7 @@ class RecordingService : Service() {
         screen = null
         RecorderState.update {
             it.copy(
-                recordingEnabled = false, audioRecording = false, screenRecording = false,
+                recordingEnabled = false, audioRecording = false, audioPausedReason = null, screenRecording = false,
                 screenStoppedReason = null, screenPausedReason = null,
             )
         }
@@ -242,6 +262,12 @@ class RecordingService : Service() {
 
         override fun onError(message: String) {
             Log.w(TAG, "audio error: $message")
+        }
+
+        override fun onHold(held: Boolean) {
+            val reason = if (held) alarmGuard.reason() else null
+            RecorderState.update { it.copy(audioPausedReason = reason) }
+            main.post { updateNotification() }
         }
     }
 
@@ -277,6 +303,8 @@ class RecordingService : Service() {
     companion object {
         private const val TAG = "RecordingService"
         private const val RESUME_MIN_INTERVAL_MS = 10_000L
+        /** 알람 뒤 마이크를 다시 잡을 동안 깨워 두는 시간. 다시 잡으면 녹음 경로가 깨워 둔다. */
+        private const val RESUME_WAKE_MS = 10_000L
         const val ACTION_START_AUDIO = "com.liferecorder.START_AUDIO"
         const val ACTION_START_SCREEN = "com.liferecorder.START_SCREEN"
         const val ACTION_STOP_ALL = "com.liferecorder.STOP_ALL"

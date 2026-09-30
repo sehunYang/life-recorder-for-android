@@ -32,11 +32,15 @@ import java.io.FileOutputStream
 class AudioRecorderSession(
     private val ctx: Context,
     private val listener: Listener,
+    /** true 를 주는 동안은 마이크를 놓고 기다린다 (알람이 울리게 — [AlarmGuard]). 조각마다 묻는다. */
+    private val hold: () -> Boolean = { false },
 ) {
     interface Listener {
         /** 한 세그먼트(.aac.part)가 닫혔다. 녹음 스레드에서 호출되므로 무거운 일은 넘겨서 처리할 것. */
         fun onSegmentFinished(part: File)
         fun onError(message: String)
+        /** 마이크를 놓았다(true) · 다시 잡았다(false). 녹음 스레드에서 호출된다. */
+        fun onHold(held: Boolean) {}
     }
 
     @Volatile var running = false
@@ -59,11 +63,25 @@ class AudioRecorderSession(
         // read 가 막혀 있어도 한 조각([CHUNK_MS]) 안에 돌아오므로 깨울 필요가 없다.
     }
 
-    /** 실패하면 [RETRY_MS] 뒤 다시 연다. stop() 전까지 계속한다. */
+    /**
+     * 실패하면 [RETRY_MS] 뒤 다시 연다. stop() 전까지 계속한다.
+     * [hold] 가 true 면 마이크를 놓은 채 기다렸다가 false 가 되면 새 세그먼트로 다시 연다.
+     */
     private fun loop() {
         while (running) {
+            if (hold()) {
+                Log.i(TAG, "holding: microphone released")
+                RecorderState.update { it.copy(audioRecording = false) }
+                listener.onHold(true)
+                while (running && hold()) Thread.sleep(HOLD_POLL_MS)
+                listener.onHold(false)
+                Log.i(TAG, "hold over: reopening microphone")
+                continue
+            }
             try {
                 record()
+                // 정상으로 돌아왔다 = stop() 이거나 hold. 둘 다 곧바로 위에서 가른다.
+                continue
             } catch (e: Exception) {
                 Log.e(TAG, "recording failed", e)
                 RecorderState.update { it.copy(audioRecording = false, audioError = "녹음 오류: ${e.message}") }
@@ -124,7 +142,8 @@ class AudioRecorderSession(
                         cur?.let(::close)
                         seg = open(now)
                     }
-                    val last = !running
+                    // 멈출 때(stop · 알람)는 이 조각을 끝 표시로 넣어 인코더를 비우고 세그먼트를 닫는다.
+                    val last = !running || hold()
                     if (!queue(e, pcm, got, pts, last, adts, info)) {
                         // 인코더가 끝내 받지 않았다. 그 조각은 잃지만 시각은 실제 흐름대로 앞으로 간다.
                         Log.w(TAG, "encoder input stalled, dropped ${got / (2 * ch) * 1000 / rate}ms")
@@ -290,5 +309,7 @@ class AudioRecorderSession(
         /** read 가 0 을 이만큼 연달아 주면 (약 2초) 처음부터 다시 연다. */
         private const val MAX_ZERO_READS = 100
         private const val ZERO_READ_SLEEP_MS = 20L
+        /** 멈춘 동안 다시 열지 묻는 간격. 기기가 잠들면 더 늦어지므로 서비스가 신호 때 잠깐 깨운다. */
+        private const val HOLD_POLL_MS = 500L
     }
 }

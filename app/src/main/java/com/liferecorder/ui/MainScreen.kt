@@ -155,6 +155,7 @@ private fun Hero(status: Status, actions: UiActions) {
                     Text(
                         when {
                             status.audioRecording -> "기록 중"
+                            on && status.audioPausedReason != null -> "잠시 멈춤"
                             on -> "기록이 끊김"
                             else -> "대기 중"
                         },
@@ -166,6 +167,7 @@ private fun Hero(status: Status, actions: UiActions) {
                         when {
                             status.audioRecording && status.currentSegmentStart > 0 ->
                                 "${fmtClock(status.currentSegmentStart)}부터 · ${fmtElapsed(now - status.currentSegmentStart)}"
+                            on && status.audioPausedReason != null -> status.audioPausedReason
                             on -> "탭해서 다시 시작"
                             else -> "ON을 누르면 소리와 화면을 기록합니다"
                         },
@@ -215,7 +217,7 @@ private fun Hero(status: Status, actions: UiActions) {
                 Text(if (on) "기록 중지" else "기록 시작", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
 
-            AnimatedVisibility(on && !status.audioRecording) {
+            AnimatedVisibility(on && !status.audioRecording && status.audioPausedReason == null) {
                 FilledTonalButton(onClick = actions.turnOn, Modifier.fillMaxWidth()) { Text("녹음 다시 시작") }
             }
             AnimatedVisibility(on && status.audioRecording && !status.screenRecording) {

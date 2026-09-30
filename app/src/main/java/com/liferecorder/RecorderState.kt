@@ -9,6 +9,8 @@ data class Status(
     val recordingEnabled: Boolean = false,
     val audioRecording: Boolean = false,
     val audioError: String? = null,
+    /** 알람이 울리게 마이크를 잠시 놓은 상태 (`AlarmGuard`). 기록은 켜져 있고 곧 다시 녹음한다. */
+    val audioPausedReason: String? = null,
     val screenRecording: Boolean = false,
     val screenStoppedReason: String? = null,
     /** 화면 꺼짐/발열로 캡처 입력만 잠시 끊긴 상태. 세션은 살아 있다. */
