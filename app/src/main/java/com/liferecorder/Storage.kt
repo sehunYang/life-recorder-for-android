@@ -68,6 +68,17 @@ object Storage {
             // "audio_"/"screen_"/"call_" 접두어를 뗀 시각 부분으로 정렬해 종류가 시간순으로 섞이게 한다.
             .sortedBy { f -> f.name.substringAfter('_') }
 
+    /**
+     * 작은 글자 자료인가 — 카톡 · 화면 글자 · 앱 사용 · 문자의 JSONL. 이것만은 모바일 데이터로도 올린다
+     * (`Prefs.isTextAnyNetwork`). 진단 덤프(`kakao_dump_`)와 수동 내보내기(`kakao_…_export_`)는 크기를 몰라 뺀다.
+     */
+    fun isSmallText(f: File): Boolean {
+        val n = f.name
+        if (!n.endsWith(".jsonl")) return false
+        if (n.startsWith("kakao_dump_") || n.contains("_export_")) return false
+        return n.startsWith("kakao_") || n.startsWith("screentext_") || n.startsWith("app_") || n.startsWith("sms_")
+    }
+
     /** 파일 이름 접두어로 Drive 폴더 키를 정한다. */
     fun folderKeyOf(f: File): String = when {
         f.name.startsWith("screen_") -> "screen"

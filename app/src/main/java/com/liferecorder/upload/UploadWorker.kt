@@ -34,6 +34,8 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
     private suspend fun run(): Result {
         val ctx = applicationContext
+        // 글자만 올리는 작업은 모바일 데이터에서도 돈다 (UploadScheduler). 그때는 큰 파일을 건드리지 않는다.
+        val textOnly = inputData.getString(KEY_SCOPE) == SCOPE_TEXT
 
         // 계정 확인이 먼저다. 수집 기록을 복원하기 전에 수집기를 돌리면
         // 재설치 직후 소급분(사진·통화)이 통째로 다시 올라간다.
@@ -54,10 +56,12 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             val folders = ensureFolders(ctx, client)
 
             if (IndexRestore.ensureRestored(ctx, client, folders.getValue("index"))) {
-                // 기록 기능 이전에 올라간 파일들의 재고 목록을 한 번 남긴다.
-                IndexSnapshot.runOnce(ctx, client, folders)
-                importCallRecordings(ctx)
-                importCameraMedia(ctx)
+                if (!textOnly) {
+                    // 기록 기능 이전에 올라간 파일들의 재고 목록을 한 번 남긴다.
+                    IndexSnapshot.runOnce(ctx, client, folders)
+                    importCallRecordings(ctx)
+                    importCameraMedia(ctx)
+                }
                 exportSms(ctx)
                 exportAppUsage(ctx)
             } else {
@@ -74,7 +78,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             Prefs.pruneFileSources(ctx, pending)
 
             while (!isStopped) {
-                val file = Storage.finishedFiles(ctx).firstOrNull() ?: break
+                val file = Storage.finishedFiles(ctx).firstOrNull { !textOnly || Storage.isSmallText(it) } ?: break
                 RecorderState.update { it.copy(uploading = file.name, lastUploadError = null) }
                 val done = uploadOne(ctx, client, file, folders)
                 if (!done) break
@@ -318,5 +322,9 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     companion object {
         private const val TAG = "UploadWorker"
         private val lock = Mutex()
+
+        /** 입력 데이터 키. 값이 [SCOPE_TEXT] 면 작은 글자 자료(`Storage.isSmallText`)만 올린다. */
+        const val KEY_SCOPE = "scope"
+        const val SCOPE_TEXT = "text"
     }
 }

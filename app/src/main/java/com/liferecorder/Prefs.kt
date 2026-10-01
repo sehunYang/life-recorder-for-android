@@ -19,6 +19,14 @@ object Prefs {
     fun isWifiOnly(ctx: Context) = sp(ctx).getBoolean("wifi_only", true)
     fun setWifiOnly(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("wifi_only", v).apply()
 
+    /**
+     * 글자 자료(카톡 · 화면 글자 · 앱 사용 · 문자 — 한 시간에 수십~수백 KB)는 Wi-Fi 가 아니어도 올린다.
+     * 녹음·화면처럼 큰 것은 [isWifiOnly] 를 따른다. 지하철 Wi-Fi 처럼 인터넷 확인이 안 되는 망에서는
+     * Wi-Fi 전용 작업이 돌지 않아 그날 일이 몇 시간씩 늦게 갔다 (2026-10-01).
+     */
+    fun isTextAnyNetwork(ctx: Context) = sp(ctx).getBoolean("text_any_network", true)
+    fun setTextAnyNetwork(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("text_any_network", v).apply()
+
     /** 자동 업로드를 충전 중일 때만 돌린다 (모뎀 전력을 배터리로 쓰지 않도록). 수동 "지금 업로드"는 무시한다. */
     fun isUploadOnlyCharging(ctx: Context) = sp(ctx).getBoolean("upload_only_charging", true)
     fun setUploadOnlyCharging(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("upload_only_charging", v).apply()

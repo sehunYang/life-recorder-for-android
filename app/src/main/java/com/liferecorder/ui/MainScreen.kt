@@ -60,6 +60,7 @@ data class UiActions(
     val uploadNow: () -> Unit,
     val setWifiOnly: (Boolean) -> Unit,
     val setChargingOnly: (Boolean) -> Unit,
+    val setTextAnyNetwork: (Boolean) -> Unit,
     val setIncludeCalls: (Boolean) -> Unit,
     val setIncludeCamera: (Boolean) -> Unit,
     val setIncludeSms: (Boolean) -> Unit,
@@ -80,6 +81,7 @@ fun MainScreen(
     status: Status,
     wifiOnly: Boolean,
     chargingOnly: Boolean,
+    textAnyNetwork: Boolean,
     includeCalls: Boolean,
     includeCamera: Boolean,
     includeSms: Boolean,
@@ -104,7 +106,7 @@ fun MainScreen(
         ) {
             Header(status)
             Hero(status, actions)
-            UploadCard(status, wifiOnly, chargingOnly, actions)
+            UploadCard(status, wifiOnly, chargingOnly, textAnyNetwork, actions)
             CollectCard(status, includeCalls, includeCamera, includeSms, includeApp, appAccessOn, includeScreenText, screenTextOn, actions)
             KakaoCard(status, includeKakao, kakaoAccessOn, kakaoDump, actions)
             KeepAliveCard(batteryExempt, actions)
@@ -253,7 +255,7 @@ private fun Chip(icon: Int, label: String, dot: Color?, modifier: Modifier = Mod
 }
 
 @Composable
-private fun UploadCard(status: Status, wifiOnly: Boolean, chargingOnly: Boolean, actions: UiActions) {
+private fun UploadCard(status: Status, wifiOnly: Boolean, chargingOnly: Boolean, textAnyNetwork: Boolean, actions: UiActions) {
     SectionCard(
         icon = painterResource(R.drawable.ic_cloud),
         title = "Google Drive",
@@ -276,6 +278,12 @@ private fun UploadCard(status: Status, wifiOnly: Boolean, chargingOnly: Boolean,
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         ToggleRow("Wi-Fi에서만 업로드", wifiOnly, actions.setWifiOnly)
+        if (wifiOnly) {
+            ToggleRow(
+                "글자 자료는 모바일 데이터로도", textAnyNetwork, actions.setTextAnyNetwork,
+                subtitle = "카톡 · 화면 글자 · 앱 사용 · 문자 (한 시간에 수십~수백 KB). 녹음·화면은 Wi-Fi를 기다립니다",
+            )
+        }
         ToggleRow("충전 중에만 자동 업로드", chargingOnly, actions.setChargingOnly, subtitle = "\"지금 업로드\"는 조건과 상관없이 바로 올립니다")
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private val batteryExempt = mutableStateOf(false)
     private val wifiOnly = mutableStateOf(true)
     private val chargingOnly = mutableStateOf(true)
+    private val textAnyNetwork = mutableStateOf(true)
     private val includeCalls = mutableStateOf(true)
     private val includeCamera = mutableStateOf(false)
     private val includeSms = mutableStateOf(true)
@@ -174,6 +175,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         wifiOnly.value = Prefs.isWifiOnly(this)
         chargingOnly.value = Prefs.isUploadOnlyCharging(this)
+        textAnyNetwork.value = Prefs.isTextAnyNetwork(this)
         includeCalls.value = Prefs.isIncludeCalls(this)
         includeCamera.value = Prefs.isIncludeCamera(this)
         includeSms.value = Prefs.isIncludeSms(this)
@@ -188,6 +190,7 @@ class MainActivity : ComponentActivity() {
                     status = status,
                     wifiOnly = wifiOnly.value,
                     chargingOnly = chargingOnly.value,
+                    textAnyNetwork = textAnyNetwork.value,
                     includeCalls = includeCalls.value,
                     includeCamera = includeCamera.value,
                     includeSms = includeSms.value,
@@ -214,6 +217,11 @@ class MainActivity : ComponentActivity() {
                         setChargingOnly = { v ->
                             Prefs.setUploadOnlyCharging(this, v)
                             chargingOnly.value = v
+                            UploadScheduler.reschedule(this)
+                        },
+                        setTextAnyNetwork = { v ->
+                            Prefs.setTextAnyNetwork(this, v)
+                            textAnyNetwork.value = v
                             UploadScheduler.reschedule(this)
                         },
                         setIncludeCalls = { v ->
