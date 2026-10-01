@@ -76,7 +76,8 @@ object Storage {
         val n = f.name
         if (!n.endsWith(".jsonl")) return false
         if (n.startsWith("kakao_dump_") || n.contains("_export_")) return false
-        return n.startsWith("kakao_") || n.startsWith("screentext_") || n.startsWith("app_") || n.startsWith("sms_")
+        return n.startsWith("kakao_") || n.startsWith("screentext_") || n.startsWith("app_") ||
+            n.startsWith("sms_") || n.startsWith("diag_")
     }
 
     /** 파일 이름 접두어로 Drive 폴더 키를 정한다. */
@@ -90,6 +91,7 @@ object Storage {
         // kakaoimg_ = 알림에서 받은 사진, kakaoexp_ = 내보내기 폴더에서 가져온 미디어.
         f.name.startsWith("kakaoimg_") || f.name.startsWith("kakaoexp_") -> "kakaomedia"
         f.name.startsWith("screentext_") -> "screentext"
+        f.name.startsWith("diag_") -> "index"          // 녹음 진단 기록 (DiagLog)
         f.name.startsWith("kakao_") -> "kakao"
         else -> "audio"
     }

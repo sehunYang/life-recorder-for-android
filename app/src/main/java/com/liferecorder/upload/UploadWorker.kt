@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.liferecorder.Config
+import com.liferecorder.DiagLog
 import com.liferecorder.Notifications
 import com.liferecorder.Prefs
 import com.liferecorder.RecorderState
@@ -71,6 +72,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             finalizeKakao(ctx)
             finalizeScreenText(ctx)
             finalizeIndex(ctx)
+            try { DiagLog.finalizeCompleted(ctx) } catch (e: Exception) { Log.w(TAG, "diag finalize failed", e) }
             RecorderState.refreshPending(ctx)
 
             val pending = Storage.finishedFiles(ctx).map { it.name }.toSet()

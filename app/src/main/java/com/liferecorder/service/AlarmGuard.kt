@@ -3,6 +3,7 @@ package com.liferecorder.service
 import android.app.AlarmManager
 import android.content.Context
 import android.util.Log
+import com.liferecorder.DiagLog
 
 /**
  * 알람이 울리는 동안 마이크를 놓아 준다.
@@ -44,10 +45,12 @@ class AlarmGuard(private val ctx: Context) {
         val a = active
         if (a != null && now < a && next != a) {
             Log.i(TAG, "alarm at ${stamp(a)} cancelled before ringing, releasing")
+            DiagLog.write(ctx, "alarm", "event" to "cancelled", "at" to a)
             active = null
             released = false
         }
         Log.i(TAG, "next alarm: ${next?.let(::stamp) ?: "없음"}")
+        DiagLog.write(ctx, "alarm", "event" to "next", "at" to next)
     }
 
     /**
@@ -59,6 +62,7 @@ class AlarmGuard(private val ctx: Context) {
         if (now < a || released) return false
         released = true
         Log.i(TAG, "alarm at ${stamp(a)} handled, resuming audio")
+        DiagLog.write(ctx, "alarm", "event" to "handled", "at" to a)
         true
     }
 
@@ -78,6 +82,7 @@ class AlarmGuard(private val ctx: Context) {
             active = next
             released = false
             Log.i(TAG, "holding audio for alarm at ${stamp(next)}")
+            DiagLog.write(ctx, "alarm", "event" to "holding", "at" to next)
             return true
         }
         return false

@@ -13,7 +13,7 @@ class StorageTextTest {
         listOf(
             "kakao_2026-10-01_h08.jsonl", "screentext_2026-10-01_h08.jsonl",
             "app_2026-10-01_h08.jsonl", "sms_2026-10-01_h08.jsonl",
-            "kakao_2026-09-30.jsonl", "app_2026-09-29.jsonl",
+            "kakao_2026-09-30.jsonl", "app_2026-09-29.jsonl", "diag_2026-10-01_h08.jsonl",
         ).forEach { assertTrue(it, t(it)) }
     }
 

@@ -9,6 +9,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.util.Log
 import com.liferecorder.Config
+import com.liferecorder.DiagLog
 import com.liferecorder.RecorderState
 import com.liferecorder.SegmentClock
 import com.liferecorder.Storage
@@ -71,11 +72,13 @@ class AudioRecorderSession(
         while (running) {
             if (hold()) {
                 Log.i(TAG, "holding: microphone released")
+                DiagLog.write(ctx, "hold")
                 RecorderState.update { it.copy(audioRecording = false) }
                 listener.onHold(true)
                 while (running && hold()) Thread.sleep(HOLD_POLL_MS)
                 listener.onHold(false)
                 Log.i(TAG, "hold over: reopening microphone")
+                DiagLog.write(ctx, "hold_end", "running" to running)
                 continue
             }
             try {
@@ -84,6 +87,7 @@ class AudioRecorderSession(
                 continue
             } catch (e: Exception) {
                 Log.e(TAG, "recording failed", e)
+                DiagLog.write(ctx, "error", "message" to (e.message ?: e.toString()))
                 RecorderState.update { it.copy(audioRecording = false, audioError = "녹음 오류: ${e.message}") }
                 listener.onError("녹음 오류: ${e.message}")
             }
@@ -109,6 +113,7 @@ class AudioRecorderSession(
         val min = AudioRecord.getMinBufferSize(rate, mask, AudioFormat.ENCODING_PCM_16BIT)
         var rec: AudioRecord? = null
         var enc: MediaCodec? = null
+        var endReason = "stop"
         try {
             // 무엇이 실패하든 finally 가 마이크를 놓는다. 놓지 않고 5초마다 다시 열면 마이크 핸들이 쌓인다.
             val r = AudioRecord(Config.AUDIO_SOURCE, rate, mask, AudioFormat.ENCODING_PCM_16BIT, maxOf(min, chunk * 4))
@@ -139,11 +144,13 @@ class AudioRecorderSession(
                     val now = System.currentTimeMillis()
                     val cur = seg
                     if (cur == null || now >= cur.end) {
-                        cur?.let(::close)
-                        seg = open(now)
+                        cur?.let { close(it, "boundary") }
+                        seg = open(now, if (cur == null) "mic_open" else "boundary")
                     }
                     // 멈출 때(stop · 알람)는 이 조각을 끝 표시로 넣어 인코더를 비우고 세그먼트를 닫는다.
-                    val last = !running || hold()
+                    val held = hold()
+                    val last = !running || held
+                    if (held) endReason = "hold"
                     if (!queue(e, pcm, got, pts, last, adts, info)) {
                         // 인코더가 끝내 받지 않았다. 그 조각은 잃지만 시각은 실제 흐름대로 앞으로 간다.
                         Log.w(TAG, "encoder input stalled, dropped ${got / (2 * ch) * 1000 / rate}ms")
@@ -159,10 +166,13 @@ class AudioRecorderSession(
                     Drain.MORE -> {}
                 }
             }
+        } catch (e: Exception) {
+            endReason = "error"
+            throw e
         } finally {
             rec?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
             enc?.let { try { it.stop() } catch (_: Exception) {}; it.release() }
-            seg?.let(::close)
+            seg?.let { close(it, endReason) }
             seg = null
         }
     }
@@ -230,15 +240,18 @@ class AudioRecorderSession(
         return if (wrote) Drain.MORE else Drain.EMPTY
     }
 
-    private fun open(now: Long): Segment {
+    private fun open(now: Long, reason: String): Segment {
         val part = Storage.newAudioPart(ctx, now)
         val end = SegmentClock.nextBoundary(now)
+        DiagLog.write(ctx, "segment_open", "name" to part.name, "reason" to reason)
         RecorderState.update { it.copy(audioRecording = true, audioError = null, currentSegmentStart = now) }
         Log.i(TAG, "segment started: ${part.name}, ends in ${(end - now) / 1000}s")
-        return Segment(part, end)
+        return Segment(part, end, now)
     }
 
-    private fun close(seg: Segment) {
+    private fun close(seg: Segment, reason: String) {
+        DiagLog.write(ctx, "segment_close", "name" to seg.file.name, "reason" to reason,
+            "sec" to (System.currentTimeMillis() - seg.start) / 1000, "bytes" to seg.bytes)
         try { seg.out.close() } catch (e: Exception) { Log.w(TAG, "close failed", e) }
         if (seg.bytes > 0) listener.onSegmentFinished(seg.file) else seg.file.delete()
     }
@@ -248,7 +261,7 @@ class AudioRecorderSession(
         while (running && System.currentTimeMillis() < until) Thread.sleep(200)
     }
 
-    private class Segment(val file: File, val end: Long) {
+    private class Segment(val file: File, val end: Long, val start: Long) {
         val out = BufferedOutputStream(FileOutputStream(file), 1 shl 16)
         var bytes = 0L
         private var flushedAt = System.currentTimeMillis()

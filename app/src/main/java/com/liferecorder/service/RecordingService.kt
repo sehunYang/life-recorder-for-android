@@ -16,6 +16,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import com.liferecorder.AppScope
+import com.liferecorder.DiagLog
 import com.liferecorder.Notifications
 import com.liferecorder.Prefs
 import com.liferecorder.PrivateScreen
@@ -106,6 +107,7 @@ class RecordingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "onStartCommand action=${intent?.action}")
+        DiagLog.write(this, "service", "event" to (intent?.action?.substringAfterLast('.') ?: "RESTARTED_BY_SYSTEM"))
         when (intent?.action) {
             ACTION_START_AUDIO -> {
                 if (!goForeground(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)) return START_NOT_STICKY
@@ -294,6 +296,7 @@ class RecordingService : Service() {
     }
 
     override fun onDestroy() {
+        DiagLog.write(this, "service", "event" to "DESTROY")
         scope.cancel()
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         audio?.stop()
