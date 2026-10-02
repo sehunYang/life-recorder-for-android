@@ -22,12 +22,24 @@ import com.liferecorder.DiagLog
  *
  * 타이머 · 캘린더 알림 소리는 [AlarmManager.getNextAlarmClock] 에 없어 여기서 막지 못한다.
  *
+ * **몇 초 앞에 잡힌 "알람"은 알람이 아니다** (v0.8.3, 10/2 진단 기록): 어떤 앱이 2초 뒤 알람을 걸었다
+ * 지우기를 수분마다 되풀이해, 그때마다 녹음이 끊겼다(08시대 7조각). 07:59 의 것은 울릴 시각이 지난 뒤에
+ * 지워져 취소로 보지 못하고 화면을 켤 때까지 9분을 멈췄다. 시계 앱의 알람·다시 알림은 몇 분 앞에 잡히므로
+ * 처음 알게 된 때와 울릴 때의 간격이 [MIN_NOTICE_MS] 보다 짧으면 멈추지 않는다 ([isShortNotice]).
+ * 서비스가 막 켜졌을 때 읽은 알람은 언제 잡혔는지 모르므로 믿는다. 누가 걸었는지(`pkg`)는 진단 기록에 남긴다.
+ *
  * 녹음 스레드([shouldHold])와 메인 스레드(나머지)가 함께 쓰므로 모든 상태는 이 객체의 락 안에서만 바꾼다.
  */
 class AlarmGuard(private val ctx: Context) {
 
     /** 시스템이 알려 준 다음 알람 시각(벽시계 ms). 없으면 null. */
     private var upcoming: Long? = null
+    /** [upcoming] 을 처음 안 때(벽시계 ms). 서비스 시작 때 읽은 것은 0 — 언제 잡혔는지 모르니 믿는다. */
+    private var upcomingSeenAt = 0L
+    /** 첫 [refresh] 를 했나 (서비스 시작). */
+    private var primed = false
+    /** 짧은 예고라 건너뛴 알람 — 진단 기록을 한 번만 쓰려고. */
+    private var skipped: Long? = null
     /** 지금 멈춰 주고 있는 알람의 시각. 멈춘 동안만 null 이 아니다. */
     private var active: Long? = null
     /** [active] 알람이 끝났다는 신호(화면 꺼짐 · 잠금 해제)를 받았다. */
@@ -35,11 +47,15 @@ class AlarmGuard(private val ctx: Context) {
 
     /** 다음 알람을 다시 읽는다. 서비스 시작 때와 ACTION_NEXT_ALARM_CLOCK_CHANGED 때 부른다. */
     fun refresh(now: Long = System.currentTimeMillis()) = synchronized(this) {
-        val next = try {
-            ctx.getSystemService(AlarmManager::class.java).nextAlarmClock?.triggerTime
+        val info = try {
+            ctx.getSystemService(AlarmManager::class.java).nextAlarmClock
         } catch (e: Exception) {
             Log.w(TAG, "nextAlarmClock failed", e); null
         }
+        val next = info?.triggerTime
+        val pkg = try { info?.showIntent?.creatorPackage } catch (e: Exception) { null }
+        if (next != upcoming) upcomingSeenAt = if (primed) now else 0L
+        primed = true
         upcoming = next
         // 울리기 전에 알람이 꺼졌거나 옮겨졌다 — 멈춰 둘 이유가 없어졌다.
         val a = active
@@ -50,7 +66,7 @@ class AlarmGuard(private val ctx: Context) {
             released = false
         }
         Log.i(TAG, "next alarm: ${next?.let(::stamp) ?: "없음"}")
-        DiagLog.write(ctx, "alarm", "event" to "next", "at" to next)
+        DiagLog.write(ctx, "alarm", "event" to "next", "at" to next, "pkg" to pkg)
     }
 
     /**
@@ -79,6 +95,14 @@ class AlarmGuard(private val ctx: Context) {
         }
         val next = upcoming ?: return false
         if (now >= next - LEAD_MS && now < next + MAX_HOLD_MS) {
+            if (isShortNotice(next, upcomingSeenAt)) {
+                if (skipped != next) {
+                    skipped = next
+                    Log.i(TAG, "ignoring alarm at ${stamp(next)} — set only ${next - upcomingSeenAt}ms ahead")
+                    DiagLog.write(ctx, "alarm", "event" to "short_notice", "at" to next, "aheadMs" to (next - upcomingSeenAt))
+                }
+                return false
+            }
             active = next
             released = false
             Log.i(TAG, "holding audio for alarm at ${stamp(next)}")
@@ -99,6 +123,12 @@ class AlarmGuard(private val ctx: Context) {
         const val LEAD_MS = 60_000L
         /** 끝났다는 신호가 없어도 이만큼 지나면 다시 녹음한다. */
         const val MAX_HOLD_MS = 30 * 60_000L
+        /** 처음 안 때부터 울릴 때까지 이보다 짧으면 알람으로 보지 않는다. 다시 알림(최소 1분)보다 짧게. */
+        const val MIN_NOTICE_MS = 30_000L
+
+        /** 몇 초 앞에 잡힌 알람인가. [seenAt] 이 0 이면(서비스 시작 때 읽음) 믿는다. */
+        fun isShortNotice(trigger: Long, seenAt: Long): Boolean =
+            seenAt > 0L && trigger - seenAt < MIN_NOTICE_MS
 
         private fun stamp(ms: Long) = com.liferecorder.SegmentClock.stamp(ms)
 
